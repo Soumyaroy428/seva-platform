@@ -160,7 +160,7 @@ function LoginContent() {
         inputRefs.current[0]?.focus();
       }, 200);
     } else {
-      setError(res.error || 'Failed to send OTP code.');
+      setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Failed to send OTP code.');
     }
   };
 
@@ -238,7 +238,7 @@ function LoginContent() {
       setSuccessMessage('Verification successful! Accessing your portal...');
       setTimeout(() => handleRedirect(userRole), 600);
     } else {
-      setError(res.error || 'Verification code is invalid or has expired.');
+      setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Verification code is invalid or has expired.');
     }
   };
 
@@ -257,7 +257,7 @@ function LoginContent() {
         setSuccessMessage('Login successful! Redirecting...');
         setTimeout(() => handleRedirect(userRole), 500);
       } else {
-        setError(res.error || 'Failed to login');
+        setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Failed to login');
       }
     } else {
       const res = await passwordRegister({
@@ -276,7 +276,7 @@ function LoginContent() {
         setSuccessMessage(res.message || 'Account registered successfully!');
         setTimeout(() => handleRedirect(userRole), 1000);
       } else {
-        setError(res.error || 'Failed to register');
+        setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Failed to register');
       }
     }
   };
@@ -342,14 +342,14 @@ function LoginContent() {
           {error && (
             <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-700 text-xs font-semibold animate-in fade-in">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{error}</span>
+              <span>{typeof error === 'string' ? error : (error as any)?.message || JSON.stringify(error)}</span>
             </div>
           )}
 
           {successMessage && (
             <div className="mb-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-2.5 text-emerald-700 text-xs font-semibold animate-in fade-in">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{successMessage}</span>
+              <span>{typeof successMessage === 'string' ? successMessage : (successMessage as any)?.message || JSON.stringify(successMessage)}</span>
             </div>
           )}
 

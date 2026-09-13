@@ -62,15 +62,16 @@ export default function FoodDonationModal({ isOpen, onClose, onSuccess }: FoodDo
         body: JSON.stringify(payload)
       });
 
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to submit food donation');
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        const msg = typeof json?.error === 'string' ? json.error : json?.error?.message || json?.message || 'Failed to submit food donation';
+        throw new Error(msg);
       }
 
       onSuccess(json.data);
       onClose();
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error scheduling food pickup.');
+      setErrorMessage(typeof err?.message === 'string' ? err.message : 'Error scheduling food pickup.');
     } finally {
       setIsSubmitting(false);
     }

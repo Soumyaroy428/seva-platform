@@ -63,15 +63,16 @@ export default function VolunteerModal({ isOpen, onClose, onSuccess }: Volunteer
         body: JSON.stringify(payload)
       });
 
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to submit application');
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        const msg = typeof json?.error === 'string' ? json.error : json?.error?.message || json?.message || 'Failed to submit application';
+        throw new Error(msg);
       }
 
       setRegisteredVolunteer(json.data);
       onSuccess(json.data);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error submitting registration.');
+      setErrorMessage(typeof err?.message === 'string' ? err.message : 'Error submitting registration.');
     } finally {
       setIsSubmitting(false);
     }

@@ -16,10 +16,12 @@ const nextConfig = {
     ],
   },
   async rewrites() {
+    const rawBackendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = rawBackendUrl.replace(/\/+$/, '');
     return [
       {
         source: '/api/:path*',
-        destination: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/:path*`,
+        destination: `${backendUrl}/api/:path*`,
       },
     ];
   },

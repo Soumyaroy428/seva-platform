@@ -63,6 +63,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
   }, []);
 
+  const extractErrorMessage = (data: any, defaultMsg: string): string => {
+    if (!data) return defaultMsg;
+    if (typeof data === 'string') return data;
+    if (typeof data.error === 'string') return data.error;
+    if (data.error && typeof data.error.message === 'string') return data.error.message;
+    if (typeof data.message === 'string') return data.message;
+    if (data.error && typeof data.error === 'object') {
+      try {
+        return data.error.message || JSON.stringify(data.error);
+      } catch {
+        return defaultMsg;
+      }
+    }
+    return defaultMsg;
+  };
+
   const sendOtp = async (identifier: string, intent: 'login' | 'register', registerData?: any) => {
     try {
       const res = await fetch('/api/auth/send-otp', {
@@ -70,9 +86,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, intent, registerData })
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Failed to send verification code.' };
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        return { success: false, error: extractErrorMessage(data, res.statusText || 'Failed to send verification code.') };
       }
       return {
         success: true,
@@ -80,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         otpPreview: data.otpPreview
       };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error sending OTP.' };
+      return { success: false, error: err?.message || 'Network error sending OTP.' };
     }
   };
 
@@ -91,9 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, code, registerData })
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Verification failed.' };
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        return { success: false, error: extractErrorMessage(data, res.statusText || 'Verification failed.') };
       }
 
       setUser(data.user);
@@ -103,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return { success: true, user: data.user };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error during verification.' };
+      return { success: false, error: err?.message || 'Network error during verification.' };
     }
   };
 
@@ -114,16 +130,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Login failed' };
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        return { success: false, error: extractErrorMessage(data, res.statusText || 'Login failed') };
       }
 
       setUser(data.user);
       localStorage.setItem('seva_user', JSON.stringify(data.user));
       return { success: true, user: data.user };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error occurred.' };
+      return { success: false, error: err?.message || 'Network error occurred.' };
     }
   };
 
@@ -143,16 +159,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(regData)
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        return { success: false, error: data.error || 'Registration failed' };
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        return { success: false, error: extractErrorMessage(data, res.statusText || 'Registration failed') };
       }
 
       setUser(data.user);
       localStorage.setItem('seva_user', JSON.stringify(data.user));
       return { success: true, message: data.message, user: data.user };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error during registration.' };
+      return { success: false, error: err?.message || 'Network error during registration.' };
     }
   };
 
