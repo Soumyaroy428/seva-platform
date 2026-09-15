@@ -26,6 +26,47 @@ import verifiedMetricsRouter from './routes/verifiedMetrics';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Vercel Serverless Hack: Track all pending Mongoose operations
+export const pendingMongoOps = new Set<Promise<any>>();
+const wrapMongo = (fn: Function) => function(this: any, ...args: any[]) {
+  const p = fn.apply(this, args);
+  if (p && p.then) {
+    pendingMongoOps.add(p);
+    p.finally(() => pendingMongoOps.delete(p));
+  }
+  return p;
+};
+import mongoose from 'mongoose';
+['create', 'insertMany', 'updateOne', 'updateMany', 'deleteOne', 'deleteMany', 'findOneAndUpdate', 'findOneAndReplace', 'findOneAndDelete'].forEach(method => {
+  if ((mongoose.Model as any)[method]) (mongoose.Model as any)[method] = wrapMongo((mongoose.Model as any)[method]);
+});
+
+// Middleware to await all pending Mongo operations before sending response
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  const originalSend = res.send.bind(res);
+  const originalEnd = res.end.bind(res);
+  
+  const flushAndSend = async (sender: Function, body?: any) => {
+    if (pendingMongoOps.size > 0) {
+      await Promise.allSettled(Array.from(pendingMongoOps));
+    }
+    sender(body);
+  };
+
+  res.json = (body) => { flushAndSend(originalJson, body); return res; };
+  res.send = (body) => { flushAndSend(originalSend, body); return res; };
+  res.end = ((chunk: any, encoding: any, cb: any) => {
+    if (pendingMongoOps.size > 0) {
+      Promise.allSettled(Array.from(pendingMongoOps)).then(() => originalEnd(chunk, encoding, cb));
+    } else {
+      originalEnd(chunk, encoding, cb);
+    }
+    return res;
+  }) as any;
+  next();
+});
+
 // CORS configuration for frontend
 const configuredOrigins = process.env.CORS_ORIGIN 
   ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) 
