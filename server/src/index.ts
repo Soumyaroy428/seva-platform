@@ -76,6 +76,7 @@ app.get(['/', '/api/health', '/api/db-status'], async (req, res) => {
 
   if (dbState === 0) {
     try {
+      isDbReady = false; // Force retry for debugging
       await initServer();
       dbState = mongoose.connection.readyState;
     } catch (err) {}
@@ -91,6 +92,10 @@ app.get(['/', '/api/health', '/api/db-status'], async (req, res) => {
       status: stateLabels[dbState] || 'unknown',
       name: mongoose.connection.name || 'seva',
       host: mongoose.connection.host || null
+    },
+    debug: {
+      hasMongoUri: !!process.env.MONGODB_URI,
+      hasDbUrl: !!process.env.DATABASE_URL
     },
     timestamp: new Date().toISOString()
   });
