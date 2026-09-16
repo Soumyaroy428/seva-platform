@@ -102,4 +102,14 @@ router.post('/verify-payment', (req: Request, res: Response) => {
   }
 });
 
+// Fetch payment details
+router.get('/payment/:paymentId', async (req: Request, res: Response) => {
+  try {
+    const payment = await getRazorpayInstance().payments.fetch(req.params.paymentId);
+    res.json({ success: true, payment });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Failed to fetch payment' });
+  }
+});
+
 export default router;
