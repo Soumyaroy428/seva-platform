@@ -313,51 +313,6 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
             </div>
           </div>
 
-          {/* Payment Method Selector */}
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-1.5">
-              Payment Method
-            </label>
-            <div className="grid grid-cols-3 gap-2 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('UPI')}
-                className={`py-2.5 px-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
-                  paymentMethod === 'UPI' || paymentMethod === 'QR'
-                    ? 'bg-orange-50 border-orange-500 text-orange-800'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
-                }`}
-              >
-                <QrCode className="w-5 h-5 text-orange-600" />
-                <span>UPI / QR Scan</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('Card')}
-                className={`py-2.5 px-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
-                  paymentMethod === 'Card'
-                    ? 'bg-orange-50 border-orange-500 text-orange-800'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
-                }`}
-              >
-                <CreditCard className="w-5 h-5 text-orange-600" />
-                <span>Card / Netbanking</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('Cash')}
-                className={`py-2.5 px-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
-                  paymentMethod === 'Cash'
-                    ? 'bg-orange-50 border-orange-500 text-orange-800'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
-                }`}
-              >
-                <ShieldCheck className="w-5 h-5 text-orange-600" />
-                <span>Bank / Offline</span>
-              </button>
-            </div>
-          </div>
-
           {/* Donor Information for 80G Receipt */}
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -399,31 +354,10 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
           </div>
 
           {/* Submit Button */}
-          {(paymentMethod === 'Card' || paymentMethod === 'UPI' || paymentMethod === 'QR') ? (
-            <div className="w-full flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200">
-              <p className="text-xs text-slate-500 mb-2 font-medium">Pay securely via Razorpay</p>
-              <RazorpayPaymentButton paymentButtonId="pl_Tcn43SmpMvJvzp" />
-            </div>
-          ) : (
-            <button
-              type="submit"
-              disabled={isSubmitting || amount < 20}
-              className={`w-full py-3 px-4 rounded-xl font-bold text-sm text-white shadow-lg flex items-center justify-center gap-2 transition-all ${
-                amount < 20 || isSubmitting
-                  ? 'bg-slate-300 cursor-not-allowed shadow-none'
-                  : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 shadow-orange-500/25 active:scale-[0.99]'
-              }`}
-            >
-              {isSubmitting ? (
-                <span>Verifying & Generating 80G Receipt...</span>
-              ) : (
-                <>
-                  <Heart className="w-4 h-4 fill-white" />
-                  <span>Complete Contribution of {formatINR(amount)}</span>
-                </>
-              )}
-            </button>
-          )}
+          <div className="w-full flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200 mt-4">
+            <p className="text-xs text-slate-500 mb-2 font-medium">Pay securely via Razorpay</p>
+            <RazorpayPaymentButton paymentButtonId="pl_Tcn43SmpMvJvzp" />
+          </div>
         </form>
       </div>
     </div>
