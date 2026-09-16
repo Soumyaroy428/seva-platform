@@ -9,8 +9,11 @@ router.get('/quotas', (req: Request, res: Response) => {
 });
 
 // Register new user (donor, volunteer, or admin subject to quotas)
-router.post('/register', (req: Request, res: Response) => {
+router.post('/register', async (req: Request, res: Response) => {
   try {
+    const { initServer } = await import('../index');
+    await initServer();
+
     const { name, email, password, role, phone, area, skills, availability } = req.body;
 
     if (!name || !email || !password) {
@@ -51,7 +54,7 @@ router.post('/register', (req: Request, res: Response) => {
 });
 
 // User login
-router.post('/login', (req: Request, res: Response) => {
+router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
@@ -61,6 +64,9 @@ router.post('/login', (req: Request, res: Response) => {
         error: 'Email and password are required.'
       });
     }
+
+    const { initServer } = await import('../index');
+    await initServer();
 
     const user = serverStore.authenticateUser(email.trim().toLowerCase(), password);
 

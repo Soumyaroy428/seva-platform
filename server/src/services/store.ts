@@ -2044,10 +2044,17 @@ class SevaServerStore {
     return true;
   }
 
-  authenticateUser(email: string, pass: string) {
-    const user = this.findUserByEmail(email);
+  authenticateUser(identifier: string, pass: string) {
+    const norm = this.normalizeIdentifier(identifier);
+    let user;
+    if (norm.type === 'email') {
+      user = this.findUserByEmail(norm.key);
+    } else {
+      user = this.users.find(u => u.phone && u.phone.replace(/\D/g, '').endsWith(norm.key));
+    }
+    
     if (!user || user.password !== pass) {
-      throw new Error('Invalid email or password.');
+      throw new Error('Invalid email, mobile number, or password.');
     }
 
     if (user.role === 'volunteer') {
