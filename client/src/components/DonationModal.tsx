@@ -313,45 +313,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
             </div>
           </div>
 
-          {/* Donor Information for 80G Receipt */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={donorName}
-                  onChange={(e) => setDonorName(e.target.value)}
-                  placeholder="e.g. Rahul Sharma"
-                  className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Email for Receipt *</label>
-                <input
-                  type="email"
-                  required
-                  value={donorEmail}
-                  onChange={(e) => setDonorEmail(e.target.value)}
-                  placeholder="rahul@example.com"
-                  className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white"
-                />
-              </div>
-            </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-600 select-none">
-                <input
-                  type="checkbox"
-                  checked={isAnonymous}
-                  onChange={(e) => setIsAnonymous(e.target.checked)}
-                  className="w-3.5 h-3.5 text-orange-600 rounded border-slate-300 focus:ring-orange-500"
-                />
-                <span>Donate anonymously (Hide my name on public donor roll)</span>
-              </label>
-            </div>
-          </div>
 
           {/* Submit Button */}
           <div className="w-full flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200 mt-4">
