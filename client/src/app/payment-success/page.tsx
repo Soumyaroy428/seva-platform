@@ -27,7 +27,7 @@ function PaymentSuccessContent() {
         if (data.success && data.payment) {
           setPayment(data.payment);
         } else {
-          setError('Failed to load payment details.');
+          setError(data.error || 'Failed to load payment details.');
         }
       } catch (err) {
         setError('An error occurred while fetching payment details.');
