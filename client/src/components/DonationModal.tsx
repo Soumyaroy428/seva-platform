@@ -75,6 +75,44 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     setTimeout(() => setCopiedUPI(false), 2000);
   };
 
+  const loadRazorpay = () => new Promise((resolve) => {
+    if ((window as any).Razorpay) return resolve(true);
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+
+  const recordDonation = async (txnId: string) => {
+    const payload = {
+      donorName: isAnonymous ? 'Kind Supporter' : donorName,
+      donorEmail,
+      donorPhone,
+      amount,
+      campaignId: campaign?.id || campaign?._id,
+      campaignTitle: campaign?.title || 'General Community Hunger Relief',
+      paymentMethod,
+      transactionId: txnId,
+      isAnonymous,
+      recurringFrequency
+    };
+
+    const res = await fetch('/api/donations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      const msg = typeof json?.error === 'string' ? json.error : json?.error?.message || json?.message || 'Failed to process contribution';
+      throw new Error(msg);
+    }
+
+    return json.data;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -92,35 +130,77 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     setErrorMessage('');
 
     try {
-      const payload = {
-        donorName: isAnonymous ? 'Kind Supporter' : donorName,
-        donorEmail,
-        donorPhone,
-        amount,
-        campaignId: campaign?.id || campaign?._id,
-        campaignTitle: campaign?.title || 'General Community Hunger Relief',
-        paymentMethod,
-        transactionId: transactionId || `TXN-UPI-${Math.floor(10000000 + Math.random() * 90000000)}`,
-        isAnonymous,
-        recurringFrequency
-      };
+      if (paymentMethod === 'Card' || paymentMethod === 'Netbanking') {
+        const isLoaded = await loadRazorpay();
+        if (!isLoaded) throw new Error('Razorpay SDK failed to load. Are you online?');
 
-      const res = await fetch('/api/donations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+        const orderRes = await fetch('/api/razorpay/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: amount * 100 })
+        });
+        const orderData = await orderRes.json();
+        if (!orderData.success) throw new Error(orderData.error || 'Failed to create Razorpay order');
 
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.success) {
-        const msg = typeof json?.error === 'string' ? json.error : json?.error?.message || json?.message || 'Failed to process contribution';
-        throw new Error(msg);
+        const options = {
+          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: 'Seva Humanitarian',
+          description: campaign?.title || 'General Community Hunger Relief',
+          order_id: orderData.order_id,
+          handler: async function (response: any) {
+            try {
+              const verifyRes = await fetch('/api/razorpay/verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature
+                })
+              });
+              const verifyData = await verifyRes.json();
+              if (!verifyData.success) {
+                setErrorMessage(verifyData.error || 'Payment verification failed');
+                setIsSubmitting(false);
+                return;
+              }
+              const donation = await recordDonation(response.razorpay_payment_id);
+              onSuccess(donation);
+            } catch (err: any) {
+              setErrorMessage(err.message || 'Error recording verified payment');
+              setIsSubmitting(false);
+            }
+          },
+          prefill: {
+            name: donorName,
+            email: donorEmail,
+            contact: donorPhone
+          },
+          theme: {
+            color: '#ea580c'
+          },
+          modal: {
+            ondismiss: function () {
+              setIsSubmitting(false);
+            }
+          }
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', function (response: any) {
+          setErrorMessage(response.error.description || 'Payment failed');
+          setIsSubmitting(false);
+        });
+        rzp.open();
+      } else {
+        const txnId = transactionId || `TXN-UPI-${Math.floor(10000000 + Math.random() * 90000000)}`;
+        const donation = await recordDonation(txnId);
+        onSuccess(donation);
       }
-
-      onSuccess(json.data);
     } catch (err: any) {
       setErrorMessage(typeof err?.message === 'string' ? err.message : 'An error occurred while submitting payment.');
-    } finally {
       setIsSubmitting(false);
     }
   };

@@ -11,7 +11,7 @@ router.get('/quotas', (req: Request, res: Response) => {
 // Register new user (donor, volunteer, or admin subject to quotas)
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { initServer } = await import('../index');
+    const { initServer } = await import('../index.js');
     await initServer();
 
     const { name, email, password, role, phone, area, skills, availability } = req.body;
@@ -65,7 +65,7 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    const { initServer } = await import('../index');
+    const { initServer } = await import('../index.js');
     await initServer();
 
     const user = serverStore.authenticateUser(email.trim().toLowerCase(), password);
