@@ -53,6 +53,8 @@ router.post('/settings', (req: Request, res: Response) => {
       totalPeopleOffset,
       activeVolunteersOffset,
       targetDonationGoal,
+      maxAdmins,
+      maxVolunteers,
       reviewer
     } = req.body;
 
@@ -69,7 +71,9 @@ router.post('/settings', (req: Request, res: Response) => {
       ...(totalMealsOffset !== undefined && { totalMealsOffset: Number(totalMealsOffset) }),
       ...(totalPeopleOffset !== undefined && { totalPeopleOffset: Number(totalPeopleOffset) }),
       ...(activeVolunteersOffset !== undefined && { activeVolunteersOffset: Number(activeVolunteersOffset) }),
-      ...(targetDonationGoal !== undefined && { targetDonationGoal: Number(targetDonationGoal) })
+      ...(targetDonationGoal !== undefined && { targetDonationGoal: Number(targetDonationGoal) }),
+      ...(maxAdmins !== undefined && { maxAdmins: Number(maxAdmins) }),
+      ...(maxVolunteers !== undefined && { maxVolunteers: Number(maxVolunteers) })
     }, reviewer || 'System Admin');
 
     res.json({

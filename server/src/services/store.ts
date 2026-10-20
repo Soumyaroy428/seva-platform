@@ -14,6 +14,8 @@ import {
   DistributionEventModel
 } from '../models';
 
+import { sendOtpEmail, sendDonationReceiptEmail, sendVolunteerStatusEmail } from './email';
+
 export interface IRightHeroCard {
   id?: string;
   _id?: string;
@@ -174,6 +176,8 @@ export interface ISiteSettings {
   totalPeopleOffset: number;
   activeVolunteersOffset: number;
   targetDonationGoal: number;
+  maxAdmins: number;
+  maxVolunteers: number;
 }
 
 export interface IPaymentQR {
@@ -403,7 +407,9 @@ class SevaServerStore {
     totalMealsOffset: 125000,
     totalPeopleOffset: 48200,
     activeVolunteersOffset: 840,
-    targetDonationGoal: 1050000
+    targetDonationGoal: 1050000,
+    maxAdmins: 1,
+    maxVolunteers: 4
   };
 
   private verifiedMetrics: IVerifiedMetrics = {
@@ -851,6 +857,22 @@ class SevaServerStore {
     this.donations.unshift(newDonation);
     this.logAudit(data.donorEmail, 'DONATION_SUCCESS', 'Donation', `Processed ₹${data.amount} (ID: ${donationId})`);
 
+    // Dispatch 80G Tax Receipt via Resend
+    if (newDonation.donorEmail && newDonation.donorEmail.includes('@')) {
+      sendDonationReceiptEmail({
+        to: newDonation.donorEmail,
+        donation: {
+          donationId: newDonation.donationId,
+          donorName: newDonation.donorName,
+          amount: newDonation.amount,
+          campaignTitle: newDonation.campaignTitle || 'General Hunger Relief & Kitchen Support',
+          paymentMethod: newDonation.paymentMethod || 'UPI',
+          transactionId: newDonation.transactionId,
+          createdAt: newDonation.createdAt
+        }
+      }).catch(err => console.warn('Resend 80G Receipt dispatch error:', err));
+    }
+
     // Asynchronously persist to MongoDB Atlas
     DonationModel.create({
       id: newDonation.id,
@@ -927,10 +949,11 @@ class SevaServerStore {
   updateVolunteerStatus(id: string, status: any, reviewer: string) {
     const v = this.volunteers.find(vol => vol.id === id || vol.volunteerId === id);
     if (v) {
+      const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : 4;
       if (status === 'Approved' && v.status !== 'Approved') {
         const approvedCount = this.volunteers.filter(vol => vol.status === 'Approved').length;
-        if (approvedCount >= 4) {
-          throw new Error('Maximum approved volunteer limit reached. Exactly 4 active volunteers are permitted on the platform.');
+        if (approvedCount >= maxVolunteers) {
+          throw new Error(`Maximum approved volunteer limit reached. Exactly ${maxVolunteers} active volunteers are permitted on the platform.`);
         }
       }
 
@@ -940,6 +963,16 @@ class SevaServerStore {
         user.volunteerStatus = status;
       }
       this.logAudit(reviewer, 'VOLUNTEER_STATUS_UPDATED', 'Volunteer', `Updated ${v.volunteerId} (${v.name}) status to ${status}`);
+
+      // Dispatch status update email via Resend
+      if (v.email && v.email.includes('@')) {
+        sendVolunteerStatusEmail({
+          to: v.email,
+          name: v.name,
+          status,
+          volunteerId: v.volunteerId
+        }).catch(err => console.warn('Resend volunteer status email error:', err));
+      }
 
       // Persist to MongoDB Atlas
       VolunteerModel.updateOne(
@@ -1016,6 +1049,22 @@ class SevaServerStore {
     }
 
     this.logAudit(data.collectedBy, 'HAND_CASH_COLLECTED', 'Donation', `Collected ₹${data.amount} hand cash from ${data.donorName} (${donationId})`);
+
+    // Dispatch 80G Tax Receipt via Resend if donor provided valid email
+    if (data.donorEmail && data.donorEmail.includes('@') && !data.donorEmail.endsWith('@offline.donations')) {
+      sendDonationReceiptEmail({
+        to: data.donorEmail,
+        donation: {
+          donationId: newDonation.donationId,
+          donorName: newDonation.donorName,
+          amount: newDonation.amount,
+          campaignTitle: newDonation.campaignTitle || 'General Hunger Relief & Kitchen Support',
+          paymentMethod: 'Cash',
+          transactionId: newDonation.transactionId,
+          createdAt: newDonation.createdAt
+        }
+      }).catch(err => console.warn('Resend cash donation receipt error:', err));
+    }
 
     // Persist cash donation to MongoDB Atlas
     DonationModel.create({
@@ -1767,21 +1816,23 @@ class SevaServerStore {
     const adminUsers = this.users.filter(u => u.role === 'admin');
     const volUsers = this.users.filter(u => u.role === 'volunteer');
     const approvedVols = this.volunteers.filter(v => v.status === 'Approved');
+    const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : 1;
+    const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : 4;
 
     return {
       admins: {
         current: adminUsers.length,
-        max: 2,
-        isFull: adminUsers.length >= 2,
-        availableSlots: Math.max(0, 2 - adminUsers.length),
+        max: maxAdmins,
+        isFull: adminUsers.length >= maxAdmins,
+        availableSlots: Math.max(0, maxAdmins - adminUsers.length),
         members: adminUsers.map(({ password, ...u }) => u)
       },
       volunteers: {
         current: volUsers.length,
         approvedCount: approvedVols.length,
-        max: 4,
-        isFull: volUsers.length >= 4,
-        availableSlots: Math.max(0, 4 - volUsers.length),
+        max: maxVolunteers,
+        isFull: volUsers.length >= maxVolunteers,
+        availableSlots: Math.max(0, maxVolunteers - volUsers.length),
         members: volUsers.map(({ password, ...u }) => u)
       }
     };
@@ -1834,17 +1885,20 @@ class SevaServerStore {
         throw new Error(`An account already exists with this ${type === 'phone' ? 'mobile number' : 'email'}. Please sign in with OTP instead.`);
       }
 
+      const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : 1;
+      const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : 4;
+
       if (registerData?.role === 'admin') {
         const currentAdmins = this.users.filter(u => u.role === 'admin').length;
-        if (currentAdmins >= 2) {
-          throw new Error('Maximum admin capacity reached. The platform strictly permits a maximum of 2 Administrators.');
+        if (currentAdmins >= maxAdmins) {
+          throw new Error(`Maximum admin capacity reached. The platform strictly permits a maximum of ${maxAdmins} Administrator.`);
         }
       }
 
       if (registerData?.role === 'volunteer') {
         const currentVols = this.users.filter(u => u.role === 'volunteer').length;
-        if (currentVols >= 4) {
-          throw new Error('Maximum volunteer capacity reached. The platform strictly permits a maximum of 4 Volunteers.');
+        if (currentVols >= maxVolunteers) {
+          throw new Error(`Maximum volunteer capacity reached. The platform strictly permits a maximum of ${maxVolunteers} Volunteers.`);
         }
       }
     }
@@ -1867,6 +1921,17 @@ class SevaServerStore {
       'Auth',
       `Sent 6-digit OTP code to ${type === 'phone' ? 'mobile' : 'email'} ${rawIdentifier} (${intent})`
     );
+
+    // Dispatch OTP via Resend if email identifier or user has email
+    const emailTarget = type === 'email' ? rawIdentifier : (existingUser?.email || registerData?.email);
+    if (emailTarget && emailTarget.includes('@')) {
+      sendOtpEmail({
+        to: emailTarget,
+        name: existingUser?.name || registerData?.name,
+        code,
+        intent
+      }).catch(err => console.warn('Resend OTP email error:', err));
+    }
 
     return {
       success: true,
@@ -1955,17 +2020,19 @@ class SevaServerStore {
     }
 
     // Role capacity enforcement
+    const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : 1;
+    const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : 4;
     if (data.role === 'admin') {
       const currentAdmins = this.users.filter(u => u.role === 'admin').length;
-      if (currentAdmins >= 2) {
-        throw new Error('Maximum admin capacity reached. The platform strictly permits a maximum of 2 Administrators.');
+      if (currentAdmins >= maxAdmins) {
+        throw new Error(`Maximum admin capacity reached. The platform strictly permits a maximum of ${maxAdmins} Administrator.`);
       }
     }
 
     if (data.role === 'volunteer') {
       const currentVols = this.users.filter(u => u.role === 'volunteer').length;
-      if (currentVols >= 4) {
-        throw new Error('Maximum volunteer capacity reached. The platform strictly permits a maximum of 4 Volunteers.');
+      if (currentVols >= maxVolunteers) {
+        throw new Error(`Maximum volunteer capacity reached. The platform strictly permits a maximum of ${maxVolunteers} Volunteers.`);
       }
     }
 

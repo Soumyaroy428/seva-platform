@@ -1513,7 +1513,7 @@ function AdminDashboardContent() {
               </div>
               <div>
                 <h1 className="text-sm font-black tracking-wide text-white">SEVA GOVERNANCE DESK</h1>
-                <p className="text-[10px] text-slate-400">7-Section Control • Strict Role Quotas (2 Admins / 4 Volunteers)</p>
+                <p className="text-[10px] text-slate-400">CMS Controlled • Strict Role Quotas ({quotas?.admins.max || 1} Admin / {quotas?.volunteers.max || 4} Volunteers)</p>
               </div>
             </div>
           </div>
@@ -4962,7 +4962,7 @@ function AdminDashboardContent() {
                                   className={`px-3 py-1.5 text-white rounded-lg font-bold text-xs flex items-center gap-1 shadow-sm transition-all ${
                                     quotas?.volunteers.isFull ? 'bg-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
                                   }`}
-                                  title={quotas?.volunteers.isFull ? 'Cannot approve: capacity limit of 4 volunteers reached' : 'Approve volunteer'}
+                                  title={quotas?.volunteers.isFull ? `Cannot approve: capacity limit of ${quotas?.volunteers.max || 4} volunteers reached` : 'Approve volunteer'}
                                 >
                                   <CheckCircle className="w-3.5 h-3.5" />
                                   <span>Approve</span>
@@ -5107,6 +5107,44 @@ function AdminDashboardContent() {
                     onChange={e => setSiteSettings({ ...siteSettings, minDonationINR: Number(e.target.value) })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-orange-500"
                   />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-orange-500" />
+                  Role Capacity Governance Quotas (CMS Controlled)
+                </h3>
+                <p className="text-[11px] text-slate-500 mb-3">
+                  Strictly configure the maximum permitted platform administrators and active field volunteers. Default standard: 1 Admin and 4 Volunteers.
+                </p>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Max Administrator Slots (Quota: 1)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={siteSettings.maxAdmins !== undefined ? siteSettings.maxAdmins : 1}
+                      onChange={e => setSiteSettings({ ...siteSettings, maxAdmins: Math.max(1, Number(e.target.value)) })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Currently assigned: {quotas?.admins.current || 1} of {siteSettings.maxAdmins || 1} active</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Max Field Volunteer Slots (Quota: 4)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={siteSettings.maxVolunteers !== undefined ? siteSettings.maxVolunteers : 4}
+                      onChange={e => setSiteSettings({ ...siteSettings, maxVolunteers: Math.max(1, Number(e.target.value)) })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Currently registered: {quotas?.volunteers.current || 0} of {siteSettings.maxVolunteers || 4} active</p>
+                  </div>
                 </div>
               </div>
 

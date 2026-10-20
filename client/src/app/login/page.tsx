@@ -423,7 +423,7 @@ function LoginContent() {
                           <UserCheck className="w-4 h-4 text-emerald-600" />
                           <span>Volunteer</span>
                           <span className={`text-[9px] font-mono ${quotas?.volunteers.isFull ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                            {quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '3/4'}
+                            {quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '0/4'}
                           </span>
                         </button>
 
@@ -439,7 +439,7 @@ function LoginContent() {
                           <ShieldCheck className="w-4 h-4 text-purple-600" />
                           <span>Admin</span>
                           <span className={`text-[9px] font-mono ${quotas?.admins.isFull ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                            {quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '1/2'}
+                            {quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '0/1'}
                           </span>
                         </button>
                       </div>
@@ -449,7 +449,7 @@ function LoginContent() {
                       <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
                         <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <span>
-                          <strong>Volunteer Limit ({quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '3/4'}):</strong> Strict maximum 4 volunteers permitted. Approvals are vetted by Administrator.
+                          <strong>Volunteer Limit ({quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '0/4'}):</strong> Strict maximum 4 volunteers permitted. Approvals are vetted by Administrator.
                         </span>
                       </div>
                     )}
@@ -458,7 +458,7 @@ function LoginContent() {
                       <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-xs flex items-start gap-2">
                         <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
                         <span>
-                          <strong>Admin Limit ({quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '1/2'}):</strong> Maximum 2 platform administrators permitted. Admin gets master CRUD access over all 7 modules.
+                          <strong>Admin Limit ({quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '0/1'}):</strong> Strict maximum 1 platform administrator permitted. Admin gets master CRUD access over all modules.
                         </span>
                       </div>
                     )}
@@ -701,7 +701,7 @@ function LoginContent() {
                         <UserCheck className="w-4 h-4 text-emerald-600" />
                         <span>Volunteer</span>
                         <span className={`text-[9px] font-mono ${quotas?.volunteers.isFull ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                          {quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '3/4'}
+                          {quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '0/4'}
                         </span>
                       </button>
 
@@ -717,7 +717,7 @@ function LoginContent() {
                         <ShieldCheck className="w-4 h-4 text-purple-600" />
                         <span>Admin</span>
                         <span className={`text-[9px] font-mono ${quotas?.admins.isFull ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                          {quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '1/2'}
+                          {quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '0/1'}
                         </span>
                       </button>
                     </div>
@@ -727,7 +727,7 @@ function LoginContent() {
                     <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
                       <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                       <span>
-                        <strong>Volunteer Limit ({quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '3/4'}):</strong> Strict maximum 4 volunteers permitted. Approvals are vetted by Administrator.
+                        <strong>Volunteer Limit ({quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '0/4'}):</strong> Strict maximum 4 volunteers permitted. Approvals are vetted by Administrator.
                       </span>
                     </div>
                   )}
@@ -736,7 +736,7 @@ function LoginContent() {
                     <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-xs flex items-start gap-2">
                       <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
                       <span>
-                        <strong>Admin Limit ({quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '1/2'}):</strong> Maximum 2 platform administrators permitted. Admin gets master CRUD access over all 7 modules.
+                        <strong>Admin Limit ({quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '0/1'}):</strong> Strict maximum 1 platform administrator permitted. Admin gets master CRUD access over all modules.
                       </span>
                     </div>
                   )}

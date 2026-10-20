@@ -54,6 +54,8 @@ export interface ISiteSettings {
   totalPeopleOffset: number;
   activeVolunteersOffset: number;
   targetDonationGoal: number;
+  maxAdmins?: number;
+  maxVolunteers?: number;
 }
 
 export interface ICampaignSectionSettings {
