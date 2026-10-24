@@ -40,6 +40,14 @@ RAZORPAY_KEY_SECRET=IJFFj3f9391pf3FiDiApAIHZ
 # Resend Email API Credentials
 RESEND_API_KEY=re_your_api_key_here
 RESEND_FROM_EMAIL=SEVA Platform <onboarding@resend.dev>
+
+# CMS Administrator Credentials (Env Controlled)
+CMS_ADMIN_EMAIL=admin@seva.org
+CMS_ADMIN_PASSWORD=Admin@123456
+
+# Role Capacity Governance Quotas (CMS & Env Controlled)
+MAX_ADMINS=1
+MAX_VOLUNTEERS=4
 ```
 
 ### 2.2 Frontend Configuration (`client/.env.local`)
@@ -54,6 +62,14 @@ MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/seva?
 
 # Public Razorpay Key for Frontend Checkout SDK
 NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_TcmMNzUCymX672
+
+# CMS Administrator Credentials (Env Controlled)
+NEXT_PUBLIC_CMS_ADMIN_EMAIL=admin@seva.org
+NEXT_PUBLIC_CMS_ADMIN_PASSWORD=Admin@123456
+
+# Role Capacity Governance Quotas (CMS & Env Controlled)
+NEXT_PUBLIC_MAX_ADMINS=1
+NEXT_PUBLIC_MAX_VOLUNTEERS=4
 ```
 
 ---
@@ -156,6 +172,10 @@ The SEVA Platform is optimized for seamless deployment to Vercel:
    - `RAZORPAY_KEY_ID`
    - `RAZORPAY_KEY_SECRET`
    - `RESEND_API_KEY`
+   - `CMS_ADMIN_EMAIL`
+   - `CMS_ADMIN_PASSWORD`
+   - `MAX_ADMINS`
+   - `MAX_VOLUNTEERS`
    - `CORS_ORIGIN` (Include your frontend `.vercel.app` domain)
 3. The serverless tracker (`pendingMongoOps` in `server/src/index.ts`) ensures all Mongoose writes complete before serverless execution pauses.
 

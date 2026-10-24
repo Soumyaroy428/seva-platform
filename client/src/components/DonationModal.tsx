@@ -144,7 +144,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
         if (!orderData.success) throw new Error(orderData.error || 'Failed to create Razorpay order');
 
         const options = {
-          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TcmMNzUCymX672',
           amount: orderData.amount,
           currency: orderData.currency,
           name: 'Seva Humanitarian',
@@ -158,7 +158,14 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                 body: JSON.stringify({
                   razorpay_order_id: response.razorpay_order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature
+                  razorpay_signature: response.razorpay_signature,
+                  donorName,
+                  donorEmail,
+                  donorPhone,
+                  amount,
+                  campaignId: campaign?.id,
+                  campaignTitle: campaign?.title,
+                  isAnonymous
                 })
               });
               const verifyData = await verifyRes.json();
@@ -167,7 +174,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                 setIsSubmitting(false);
                 return;
               }
-              const donation = await recordDonation(response.razorpay_payment_id);
+              const donation = verifyData.donation || await recordDonation(response.razorpay_payment_id);
               onSuccess(donation);
             } catch (err: any) {
               setErrorMessage(err.message || 'Error recording verified payment');

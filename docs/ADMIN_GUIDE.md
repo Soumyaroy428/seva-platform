@@ -11,9 +11,13 @@
 
 The **SEVA Administrator Console** provides real-time control over all public-facing content, financial flows, volunteer access, and anti-fraud pipelines.
 
-### Security Highlights
+### Security Highlights & Environment Login
+- **CMS Administrator Environment Credentials**: Default administrative credentials are controlled via `.env`:
+  - `CMS_ADMIN_EMAIL=admin@seva.org`
+  - `CMS_ADMIN_PASSWORD=Admin@123456`
+  Logging in with these credentials immediately authenticates the session with `role: 'admin'`, loads the full administrative dashboard, and unlocks all 16 CMS governance tabs.
 - **Role Guard**: Requires an authenticated user with `role === 'admin'`. Unauthorized visitors are redirected to `/login?redirect=/admin`.
-- **Capacity Quotas**: Enforces maximum administrative slots to prevent privilege escalation.
+- **Capacity Quotas**: Strictly enforces `MAX_ADMINS=1` and `MAX_VOLUNTEERS=4` to prevent privilege escalation.
 - **Audit Logging**: Every create, update, approve, reject, or delete action is permanently recorded in the immutable audit log with the acting admin's name and timestamp.
 
 ---

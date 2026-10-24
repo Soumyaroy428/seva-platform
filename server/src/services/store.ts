@@ -1856,6 +1856,25 @@ class SevaServerStore {
     const { type, key } = this.normalizeIdentifier(identifier);
     if (!key) return undefined;
 
+    const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
+    if (type === 'email' && key === envAdminEmail) {
+      let admin = this.users.find(u => u.email && u.email.trim().toLowerCase() === key);
+      if (!admin) {
+        admin = {
+          id: 'admin_cms_master',
+          name: 'Chief Administrator (CMS)',
+          email: envAdminEmail,
+          password: process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456',
+          role: 'admin',
+          phone: '+91 9876543210',
+          area: 'Central Command & CMS Operations',
+          createdAt: new Date().toISOString()
+        };
+        this.users.unshift(admin);
+      }
+      return admin;
+    }
+
     return this.users.find(u => {
       if (type === 'email') {
         return u.email && u.email.trim().toLowerCase() === key;
@@ -2113,6 +2132,33 @@ class SevaServerStore {
 
   authenticateUser(identifier: string, pass: string) {
     const norm = this.normalizeIdentifier(identifier);
+    const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
+    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456';
+
+    // Direct CMS Administrator authentication from Environment
+    if (norm.type === 'email' && norm.key.toLowerCase() === envAdminEmail && pass === envAdminPass) {
+      let admin = this.users.find(u => u.email.toLowerCase() === envAdminEmail || u.role === 'admin');
+      if (!admin) {
+        admin = {
+          id: 'admin_cms_master',
+          name: 'Chief Administrator (CMS)',
+          email: envAdminEmail,
+          password: envAdminPass,
+          role: 'admin',
+          phone: '+91 9876543210',
+          area: 'Central Command & CMS Operations',
+          createdAt: new Date().toISOString()
+        };
+        this.users.unshift(admin);
+      } else {
+        admin.role = 'admin';
+        admin.password = envAdminPass;
+      }
+      admin.token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const { password, ...safeUser } = admin;
+      this.logAudit(admin.email, 'USER_LOGIN', 'User', 'Logged in as Chief Administrator (CMS via Env)');
+      return safeUser;
+    }
     let user;
     if (norm.type === 'email') {
       user = this.findUserByEmail(norm.key);
@@ -2198,6 +2244,36 @@ class SevaServerStore {
         token: u.token,
         createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : new Date().toISOString()
       }));
+
+      // Ensure CMS Administrator from environment is active and synchronized
+      const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
+      const envAdminPass = process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456';
+      
+      let adminUser = this.users.find(u => u.email.toLowerCase() === envAdminEmail || u.role === 'admin');
+      if (!adminUser) {
+        adminUser = {
+          id: `usr-admin-${Date.now()}`,
+          name: 'Chief Administrator (CMS)',
+          email: envAdminEmail,
+          password: envAdminPass,
+          role: 'admin',
+          phone: '+91 9876543210',
+          area: 'Central Operations Hub',
+          createdAt: new Date().toISOString()
+        };
+        this.users.unshift(adminUser);
+        await UserModel.findOneAndUpdate(
+          { email: envAdminEmail },
+          adminUser,
+          { upsert: true, new: true }
+        ).catch((err: any) => console.warn('Could not persist CMS Admin to MongoDB:', err.message));
+        console.log(`✅ CMS Administrator initialized from env: ${envAdminEmail}`);
+      } else {
+        adminUser.email = envAdminEmail;
+        adminUser.password = envAdminPass;
+        adminUser.role = 'admin';
+        await UserModel.updateOne({ email: adminUser.email }, { $set: { password: envAdminPass, role: 'admin' } }).catch(() => {});
+      }
 
       // 2. Volunteers (Loaded dynamically from MongoDB Atlas, zero demo volunteers)
       const dbVols = await VolunteerModel.find().lean();

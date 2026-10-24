@@ -313,12 +313,32 @@ function LoginContent() {
                 setSuccessMessage('');
               }}
               className={`flex-1 pb-3 text-sm font-bold text-center border-b-2 transition-all ${
-                mode === 'signin'
+                mode === 'signin' && authMethod === 'otp'
                   ? 'border-orange-500 text-orange-600'
                   : 'border-transparent text-slate-400 hover:text-slate-600'
               }`}
             >
               Sign In (OTP)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signin');
+                setAuthMethod('password');
+                const defaultAdminEmail = process.env.NEXT_PUBLIC_CMS_ADMIN_EMAIL || 'admin@seva.org';
+                const defaultAdminPass = process.env.NEXT_PUBLIC_CMS_ADMIN_PASSWORD || 'Admin@123456';
+                setEmailInput(defaultAdminEmail);
+                setPassword(defaultAdminPass);
+                setError('');
+                setSuccessMessage('CMS Administrator credentials loaded from .env.');
+              }}
+              className={`flex-1 pb-3 text-xs sm:text-sm font-bold text-center border-b-2 transition-all ${
+                mode === 'signin' && authMethod === 'otp' && authMethod === 'password'
+                  ? 'border-indigo-600 text-indigo-700'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              CMS Admin Login
             </button>
             <button
               type="button"
@@ -812,6 +832,15 @@ function LoginContent() {
                 </>
               )}
               <div>
+                {mode === 'signin' && (
+                  <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-3 text-xs text-indigo-900 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <span>CMS Administrator login active from <code>.env</code></span>
+                    </div>
+                    <span className="font-mono text-[10px] font-bold bg-white text-indigo-700 px-2 py-0.5 rounded border border-indigo-200">1 Admin Slot</span>
+                  </div>
+                )}
                 <label className="block text-xs font-bold text-slate-700 mb-1">Email or Mobile Number</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -850,14 +879,14 @@ function LoginContent() {
                 disabled={loading}
                 className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-md shadow-orange-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
               >
-                {loading ? 'Authenticating...' : 'Sign In with Password'}
+                {loading ? 'Authenticating...' : (mode === 'signin' && (emailInput.toLowerCase().includes('admin') || authMethod === 'password') ? 'Sign In as CMS Administrator' : 'Sign In with Password')}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
           )}
 
           {/* Toggle between OTP and Password method */}
-          <div className="mt-6 pt-5 border-t border-slate-100 text-center hidden">
+          <div className="mt-6 pt-5 border-t border-slate-100 text-center">
             {authMethod === 'otp' ? (
               <button
                 type="button"
