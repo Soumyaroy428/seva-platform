@@ -21,8 +21,9 @@ This documentation directory contains comprehensive architectural, technical, op
 | **[3. Database Models & Schema](./DATABASE_MODELS.md)** | Complete specification of all **25 Mongoose models**, schemas, field validations, default values, and indexes. |
 | **[4. REST API Documentation](./API_DOCUMENTATION.md)** | Full endpoint reference for all **17 Express routers**, request/response schemas, query parameters, and status codes. |
 | **[5. Administrator Operations Guide](./ADMIN_GUIDE.md)** | In-depth manual covering all **16 Admin tabs**, live quota limits, payment QR approvals, content management, and audit logging. |
-| **[6. Setup, Configuration & Deployment](./SETUP_AND_DEPLOYMENT.md)** | Guide for environment variables (`.env`), Razorpay setup, Resend API, MongoDB Atlas connection, local development, and Vercel serverless deployment. |
-| **[7. Payment Integration Prompt & Technical Guide](./PAYMENT_INTEGRATION_PROMPT.md)** | Master prompt and migration blueprint for removing legacy aggregators and integrating Sovereign UPI Payments. |
+| **[6. Setup, Configuration & Deployment](./SETUP_AND_DEPLOYMENT.md)** | Guide for environment variables (`.env`), Sovereign UPI Gateway (YouPI-PG) setup, Resend API, MongoDB Atlas connection, local development, and Vercel serverless deployment. |
+| **[7. Payment Integration Prompt & Technical Guide](./PAYMENT_INTEGRATION_PROMPT.md)** | Master prompt and technical integration blueprint for the Sovereign UPI Payment Gateway. |
+| **[8. Payment Integration Verification Runbook](./VERIFY_PAYMENT_INTEGRATION.md)** | Step-by-step test cases, cURL commands, webhook simulations, and 80G receipt verification procedures. |
 
 ---
 

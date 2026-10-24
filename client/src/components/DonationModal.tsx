@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ICampaign, IDonation, IPaymentQR } from '@/lib/types';
 import { formatINR } from '@/lib/utils';
-import { Heart, X, QrCode, CreditCard, ShieldCheck, AlertCircle, Copy, Check, Sparkles } from 'lucide-react';
-import RazorpayPaymentButton from './RazorpayPaymentButton';
+import { Heart, X, QrCode, ShieldCheck, AlertCircle, Copy, Check, Sparkles, Smartphone, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface DonationModalProps {
   isOpen: boolean;
@@ -23,7 +22,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
   const [donorPhone, setDonorPhone] = useState<string>('');
   const [isAnonymous, setIsAnonymous] = useState<boolean>(false);
   const [recurringFrequency, setRecurringFrequency] = useState<IDonation['recurringFrequency']>('None');
-  const [paymentMethod, setPaymentMethod] = useState<IDonation['paymentMethod']>('UPI');
+  const [paymentTab, setPaymentTab] = useState<'dynamic' | 'static'>('dynamic');
   const [transactionId, setTransactionId] = useState<string>('');
   const [activeQRs, setActiveQRs] = useState<IPaymentQR[]>([]);
   const [selectedQR, setSelectedQR] = useState<IPaymentQR | null>(null);
@@ -31,7 +30,16 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  // Fetch approved active QRs
+  // Dynamic session state
+  const [session, setSession] = useState<{
+    paymentId: string;
+    orderId: string;
+    checkoutUrl: string;
+    upiIntent: string;
+    amount: string;
+  } | null>(null);
+
+  // Fetch approved active static QRs for fallback tab
   useEffect(() => {
     if (isOpen) {
       fetch('/api/payment-qr')
@@ -46,27 +54,39 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     }
   }, [isOpen]);
 
+  // Status Poller when dynamic session is open
+  useEffect(() => {
+    if (!session?.paymentId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/payments/status/${session.paymentId}`);
+        const data = await res.json();
+        if (data.success && data.status === 'SUCCESS' && data.donation) {
+          clearInterval(interval);
+          onSuccess(data.donation);
+        }
+      } catch {}
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [session, onSuccess]);
+
   if (!isOpen) return null;
 
   const handleAmountSelect = (val: number) => {
     setAmount(val);
     setCustomAmount(val.toString());
-    setErrorMessage('');
+    setSession(null);
   };
 
   const handleCustomAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const valStr = e.target.value;
-    setCustomAmount(valStr);
-    const parsed = parseInt(valStr, 10);
+    const val = e.target.value;
+    setCustomAmount(val);
+    const parsed = parseFloat(val);
     if (!isNaN(parsed)) {
       setAmount(parsed);
-      if (parsed < 20) {
-        setErrorMessage('Minimum donation is ₹20 according to Seva governance rules.');
-      } else {
-        setErrorMessage('');
-      }
-    } else {
-      setAmount(0);
+      setSession(null);
     }
   };
 
@@ -76,52 +96,61 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     setTimeout(() => setCopiedUPI(false), 2000);
   };
 
-  const loadRazorpay = () => new Promise((resolve) => {
-    if ((window as any).Razorpay) return resolve(true);
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-
-  const recordDonation = async (txnId: string) => {
-    const payload = {
-      donorName: isAnonymous ? 'Kind Supporter' : donorName,
-      donorEmail,
-      donorPhone,
-      amount,
-      campaignId: campaign?.id || campaign?._id,
-      campaignTitle: campaign?.title || 'General Community Hunger Relief',
-      paymentMethod,
-      transactionId: txnId,
-      isAnonymous,
-      recurringFrequency
-    };
-
-    const res = await fetch('/api/donations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok || !json?.success) {
-      const msg = typeof json?.error === 'string' ? json.error : json?.error?.message || json?.message || 'Failed to process contribution';
-      throw new Error(msg);
-    }
-
-    return json.data;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleInitializeDynamicSession = async () => {
     if (amount < 20) {
-      setErrorMessage('Minimum donation accepted is ₹20. Please enter at least ₹20.');
+      setErrorMessage('Minimum donation accepted is ₹20 INR. Please enter at least ₹20.');
+      return;
+    }
+    if (!donorName.trim() || !donorEmail.trim()) {
+      setErrorMessage('Please enter your full name and email to receive your official 80G tax receipt.');
       return;
     }
 
+    setIsSubmitting(true);
+    setErrorMessage('');
+
+    try {
+      const res = await fetch('/api/payments/create-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          donorName,
+          donorEmail,
+          donorPhone,
+          campaignId: campaign?.id || campaign?._id,
+          campaignTitle: campaign?.title || 'General Community Hunger Relief',
+          isAnonymous
+        })
+      });
+
+      const data = await res.json();
+      setIsSubmitting(false);
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to initialize payment session');
+      }
+
+      setSession({
+        paymentId: data.paymentId,
+        orderId: data.orderId,
+        checkoutUrl: data.checkoutUrl,
+        upiIntent: data.upiIntent,
+        amount: data.amount
+      });
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage(err.message || 'Payment service error. Please try again.');
+    }
+  };
+
+  const handleManualConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (amount < 20) {
+      setErrorMessage('Minimum donation accepted is ₹20 INR.');
+      return;
+    }
     if (!donorName.trim() || !donorEmail.trim()) {
       setErrorMessage('Please enter your full name and email to receive the 80G tax receipt.');
       return;
@@ -131,85 +160,33 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     setErrorMessage('');
 
     try {
-      if (paymentMethod === 'Card' || paymentMethod === 'Netbanking') {
-        const isLoaded = await loadRazorpay();
-        if (!isLoaded) throw new Error('Razorpay SDK failed to load. Are you online?');
+      const res = await fetch('/api/payments/verify-settlement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentId: session?.paymentId || `TXN-UPI-${Date.now()}`,
+          utr: transactionId || `UTR-${Math.floor(100000000000 + Math.random() * 900000000000)}`,
+          donorName,
+          donorEmail,
+          donorPhone,
+          amount,
+          campaignId: campaign?.id || campaign?._id,
+          campaignTitle: campaign?.title,
+          isAnonymous
+        })
+      });
 
-        const orderRes = await fetch('/api/razorpay/create-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: amount * 100 })
-        });
-        const orderData = await orderRes.json();
-        if (!orderData.success) throw new Error(orderData.error || 'Failed to create Razorpay order');
-
-        const options = {
-          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TcmMNzUCymX672',
-          amount: orderData.amount,
-          currency: orderData.currency,
-          name: 'Seva Humanitarian',
-          description: campaign?.title || 'General Community Hunger Relief',
-          order_id: orderData.order_id,
-          handler: async function (response: any) {
-            try {
-              const verifyRes = await fetch('/api/razorpay/verify-payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                  donorName,
-                  donorEmail,
-                  donorPhone,
-                  amount,
-                  campaignId: campaign?.id,
-                  campaignTitle: campaign?.title,
-                  isAnonymous
-                })
-              });
-              const verifyData = await verifyRes.json();
-              if (!verifyData.success) {
-                setErrorMessage(verifyData.error || 'Payment verification failed');
-                setIsSubmitting(false);
-                return;
-              }
-              const donation = verifyData.donation || await recordDonation(response.razorpay_payment_id);
-              onSuccess(donation);
-            } catch (err: any) {
-              setErrorMessage(err.message || 'Error recording verified payment');
-              setIsSubmitting(false);
-            }
-          },
-          prefill: {
-            name: donorName,
-            email: donorEmail,
-            contact: donorPhone
-          },
-          theme: {
-            color: '#ea580c'
-          },
-          modal: {
-            ondismiss: function () {
-              setIsSubmitting(false);
-            }
-          }
-        };
-
-        const rzp = new (window as any).Razorpay(options);
-        rzp.on('payment.failed', function (response: any) {
-          setErrorMessage(response.error.description || 'Payment failed');
-          setIsSubmitting(false);
-        });
-        rzp.open();
-      } else {
-        const txnId = transactionId || `TXN-UPI-${Math.floor(10000000 + Math.random() * 90000000)}`;
-        const donation = await recordDonation(txnId);
-        onSuccess(donation);
-      }
-    } catch (err: any) {
-      setErrorMessage(typeof err?.message === 'string' ? err.message : 'An error occurred while submitting payment.');
+      const data = await res.json();
       setIsSubmitting(false);
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to verify contribution');
+      }
+
+      onSuccess(data.donation);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage(err.message || 'Error recording verified payment');
     }
   };
 
@@ -228,7 +205,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
           </button>
           <div className="flex items-center gap-2 text-orange-200 text-xs font-bold uppercase tracking-wider">
             <Heart className="w-4 h-4 fill-current" />
-            <span>Secure Social Giving</span>
+            <span>Sovereign Direct UPI Giving</span>
           </div>
           <h2 className="text-2xl font-black mt-1">Make a Verified Donation</h2>
           <p className="text-xs text-orange-100 mt-1">
@@ -236,7 +213,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <div className="p-6 space-y-6">
           {errorMessage && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700 font-medium">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -297,29 +274,6 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
             </div>
           </div>
 
-          {/* Donation Mode (One-time vs Recurring) */}
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-1.5">
-              Frequency
-            </label>
-            <div className="grid grid-cols-4 gap-2 text-xs font-semibold">
-              {(['None', 'Weekly', 'Monthly', 'Quarterly'] as const).map(freq => (
-                <button
-                  key={freq}
-                  type="button"
-                  onClick={() => setRecurringFrequency(freq)}
-                  className={`py-2 rounded-lg border text-center transition-all ${
-                    recurringFrequency === freq
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  {freq === 'None' ? 'One-Time' : freq}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Donor Information for 80G Receipt */}
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -335,7 +289,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Email for Receipt *</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Email for 80G Receipt *</label>
                 <input
                   type="email"
                   required
@@ -360,12 +314,156 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
             </div>
           </div>
 
-          {/* Submit Button */}
-          <div className="w-full flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200 mt-4">
-            <p className="text-xs text-slate-500 mb-2 font-medium">Pay securely via Razorpay</p>
-            <RazorpayPaymentButton paymentButtonId="pl_Tcn43SmpMvJvzp" />
+          {/* Payment Mode Selector: Direct Dynamic UPI vs Static Bank QR */}
+          <div>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setPaymentTab('dynamic')}
+                className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                  paymentTab === 'dynamic'
+                    ? 'border-orange-500 bg-orange-50 text-orange-800 ring-2 ring-orange-400/20'
+                    : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <Smartphone className="w-4 h-4 text-orange-600" />
+                <span>Instant UPI Checkout</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentTab('static')}
+                className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                  paymentTab === 'static'
+                    ? 'border-orange-500 bg-orange-50 text-orange-800 ring-2 ring-orange-400/20'
+                    : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <QrCode className="w-4 h-4 text-orange-600" />
+                <span>Static Bank QR Code</span>
+              </button>
+            </div>
+
+            {paymentTab === 'dynamic' ? (
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+                {!session ? (
+                  <div className="text-center space-y-3">
+                    <p className="text-xs text-slate-600">
+                      Generate an instant dynamic UPI QR code or launch Google Pay, PhonePe, Paytm, or BHIM.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleInitializeDynamicSession}
+                      className="w-full py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-500/20 disabled:opacity-50"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Generating UPI Session...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Pay ₹{amount} via Dynamic UPI</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4 text-center animate-in fade-in">
+                    <div className="p-3 bg-white rounded-xl border border-slate-200 inline-block shadow-sm">
+                      {/* Embedded Dynamic QR */}
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(session.upiIntent)}`}
+                        alt="Dynamic UPI QR Code"
+                        className="w-44 h-44 mx-auto rounded-lg"
+                      />
+                    </div>
+                    <p className="text-xs font-bold text-slate-700">
+                      Scan with any UPI App or tap below on mobile:
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                      <a
+                        href={session.upiIntent}
+                        className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                      >
+                        <Smartphone className="w-4 h-4" />
+                        <span>Open Installed UPI App</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard('seva.humanitarian@upi')}
+                        className="py-2.5 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        {copiedUPI ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                        <span>{copiedUPI ? 'UPI ID Copied' : 'Copy UPI ID'}</span>
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/80">
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={handleManualConfirm}
+                        className="text-xs text-orange-600 hover:text-orange-700 font-bold underline"
+                      >
+                        {isSubmitting ? 'Verifying payment...' : 'I have authorized the payment (Confirm Now)'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* STATIC QR CODE TAB */
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+                {selectedQR ? (
+                  <div className="space-y-3 text-center">
+                    <div className="p-3 bg-white rounded-xl border border-slate-200 inline-block shadow-sm">
+                      <img
+                        src={selectedQR.qrImageUrl}
+                        alt="Approved UPI QR"
+                        className="w-40 h-40 mx-auto rounded-lg object-contain"
+                      />
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-xs font-mono font-bold text-slate-700">{selectedQR.upiId}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(selectedQR.upiId)}
+                        className="p-1 rounded hover:bg-slate-200 text-slate-500"
+                      >
+                        {copiedUPI ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 text-left">
+                        Bank Reference / UTR Number
+                      </label>
+                      <input
+                        type="text"
+                        value={transactionId}
+                        onChange={(e) => setTransactionId(e.target.value)}
+                        placeholder="12-digit UPI reference number"
+                        className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleManualConfirm}
+                      className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-orange-500/20"
+                    >
+                      {isSubmitting ? 'Verifying...' : 'Submit UTR & Claim 80G Receipt'}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 text-center py-4">No static QR codes active. Please use Instant UPI Checkout.</p>
+                )}
+              </div>
+            )}
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

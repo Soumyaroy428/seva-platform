@@ -22,7 +22,7 @@ import howItWorksRouter from './routes/howItWorks';
 import faqRouter from './routes/faq';
 import heroCardsRouter from './routes/heroCards';
 import verifiedMetricsRouter from './routes/verifiedMetrics';
-import razorpayRouter from './routes/razorpay';
+import paymentsRouter from './routes/payments';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -102,7 +102,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 
 // Healthcheck with MongoDB live status
 app.get(['/', '/api/health', '/api/db-status'], async (req, res) => {
@@ -158,7 +162,7 @@ app.use('/api/how-it-works', howItWorksRouter);
 app.use('/api/faq', faqRouter);
 app.use('/api/hero-cards', heroCardsRouter);
 app.use('/api/verified-metrics', verifiedMetricsRouter);
-app.use('/api/razorpay', razorpayRouter);
+app.use('/api/payments', paymentsRouter);
 
 
 // Initialize DB and launch server

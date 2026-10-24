@@ -7,7 +7,7 @@ import Link from 'next/link';
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
-  const paymentId = searchParams.get('razorpay_payment_id') || searchParams.get('payment_id');
+  const paymentId = searchParams.get('payment_id') || searchParams.get('order_id') || searchParams.get('paymentId') || searchParams.get('txnId');
   
   const [loading, setLoading] = useState(true);
   const [payment, setPayment] = useState<any>(null);
@@ -15,19 +15,19 @@ function PaymentSuccessContent() {
 
   useEffect(() => {
     if (!paymentId) {
-      setError('No payment ID found in URL.');
+      setError('No payment reference found in URL.');
       setLoading(false);
       return;
     }
 
     const fetchPayment = async () => {
       try {
-        const res = await fetch(`/api/razorpay/payment/${paymentId}`);
+        const res = await fetch(`/api/payments/status/${paymentId}`);
         const data = await res.json();
-        if (data.success && data.payment) {
-          setPayment(data.payment);
+        if (data.success && (data.donation || data.payment)) {
+          setPayment(data.donation || data.payment);
         } else {
-          setError(data.error || 'Failed to load payment details.');
+          setError(data.error || 'Payment record pending verification.');
         }
       } catch (err) {
         setError('An error occurred while fetching payment details.');

@@ -372,18 +372,23 @@ Update `client/src/components/DonationModal.tsx`:
 
 ## 5. Environment Variable Reference
 
-### Current Active Payment Integration Environment Variables (Razorpay):
-Used for current live cloud / Vercel operations:
+### Sovereign UPI Payment Gateway Environment Variables:
 
 #### Backend (`server/.env`):
 ```env
-# Razorpay Payment Gateway Credentials (Test Keys)
-RAZORPAY_KEY_ID=rzp_test_TcmMNzUCymX672
-RAZORPAY_KEY_SECRET=IJFFj3f9391pf3FiDiApAIHZ
+# Sovereign UPI Payment Gateway (YouPI-PG)
+YOUPI_API_URL=http://localhost:6100
+YOUPI_MERCHANT_ID=00000000-0000-0000-0000-000000000001
+YOUPI_WEBHOOK_SECRET=7a5dc526e25a7d67d24238c6fd82e818558ffa88e83377e503350a618d975ebd
+YOUPI_CHECKOUT_URL=http://localhost:7000
 
 # Resend Transactional Email API
 RESEND_API_KEY=re_123456789_placeholder
 RESEND_FROM_EMAIL=SEVA Platform <onboarding@resend.dev>
+
+# CMS Administrator Credentials (Env Controlled)
+CMS_ADMIN_EMAIL=admin@seva.org
+CMS_ADMIN_PASSWORD=Admin@123456
 
 # Governance Quotas (CMS & Env Controlled)
 MAX_ADMINS=1
@@ -395,18 +400,18 @@ MAX_VOLUNTEERS=4
 # Backend API Target (Rewritten via Next.js proxy)
 BACKEND_URL=http://localhost:5000
 
-# Public Razorpay Key for Frontend Checkout SDK
-NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_TcmMNzUCymX672
+# Sovereign UPI Gateway Public Targets
+NEXT_PUBLIC_YOUPI_CHECKOUT_URL=http://localhost:7000
+NEXT_PUBLIC_YOUPI_API_URL=http://localhost:6100
+
+# CMS Administrator Credentials (Env Controlled)
+NEXT_PUBLIC_CMS_ADMIN_EMAIL=admin@seva.org
+NEXT_PUBLIC_CMS_ADMIN_PASSWORD=Admin@123456
 
 # Governance Quotas
 NEXT_PUBLIC_MAX_ADMINS=1
 NEXT_PUBLIC_MAX_VOLUNTEERS=4
 ```
-
-### Sovereign UPI Migration Variables (When activating YouPI-PG):
-When transitioning to the peer-to-peer Sovereign Gateway:
-- Replace `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` with `YOUPI_API_URL`, `YOUPI_MERCHANT_ID`, and `YOUPI_WEBHOOK_SECRET`.
-- Replace `NEXT_PUBLIC_RAZORPAY_KEY_ID` with `NEXT_PUBLIC_YOUPI_CHECKOUT_URL`.
 
 ---
 
