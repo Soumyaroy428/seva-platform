@@ -11,7 +11,7 @@ Before launching the SEVA Platform, ensure you have:
 - **Node.js**: Version 18.x or 20.x installed (`node -v`).
 - **npm**: Version 9.x or higher (`npm -v`).
 - **MongoDB**: Either a local MongoDB instance (`mongodb://localhost:27017/seva`) or a MongoDB Atlas cluster URI. *(Note: If no database URI is provided, the platform automatically boots using its built-in reactive in-memory store).*
-- **Razorpay Account (Optional for testing payments)**: Test API Key ID and Secret Key from your Razorpay Dashboard.
+- **Sovereign UPI Gateway (YouPI-PG)**: Running locally on port 6100 (Payment API) & port 7000 (Checkout Portal) or hosted on a secure domain.
 
 ---
 
@@ -33,9 +33,11 @@ MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/seva?
 # Allowed CORS Origins (Comma-separated)
 CORS_ORIGIN=http://localhost:3000
 
-# Razorpay Payment Gateway Credentials (Test Keys)
-RAZORPAY_KEY_ID=rzp_test_TcmMNzUCymX672
-RAZORPAY_KEY_SECRET=IJFFj3f9391pf3FiDiApAIHZ
+# Sovereign UPI Payment Gateway (YouPI-PG)
+YOUPI_API_URL=http://localhost:6100
+YOUPI_MERCHANT_ID=00000000-0000-0000-0000-000000000001
+YOUPI_WEBHOOK_SECRET=your_youpi_webhook_signing_secret_here
+YOUPI_CHECKOUT_URL=http://localhost:7000
 
 # Resend Email API Credentials
 RESEND_API_KEY=re_your_api_key_here
@@ -52,8 +54,8 @@ BACKEND_URL=http://localhost:5000
 # Direct MongoDB URI (Optional for direct SSR routes)
 MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/seva?retryWrites=true&w=majority
 
-# Public Razorpay Key for Frontend Checkout SDK
-NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_TcmMNzUCymX672
+# Sovereign UPI Gateway Public Checkout Target
+NEXT_PUBLIC_YOUPI_CHECKOUT_URL=http://localhost:7000
 ```
 
 ---
@@ -153,8 +155,10 @@ The SEVA Platform is optimized for seamless deployment to Vercel:
 2. Configure Environment Variables in the Vercel backend project:
    - `MONGODB_URI`
    - `DATABASE_URL`
-   - `RAZORPAY_KEY_ID`
-   - `RAZORPAY_KEY_SECRET`
+   - `YOUPI_API_URL`
+   - `YOUPI_MERCHANT_ID`
+   - `YOUPI_WEBHOOK_SECRET`
+   - `RESEND_API_KEY`
    - `CORS_ORIGIN` (Include your frontend `.vercel.app` domain)
 3. The serverless tracker (`pendingMongoOps` in `server/src/index.ts`) ensures all Mongoose writes complete before serverless execution pauses.
 
@@ -162,16 +166,20 @@ The SEVA Platform is optimized for seamless deployment to Vercel:
 
 ## 6. Testing Guide & Test Credentials
 
-### 6.1 Testing Razorpay Payments
-1. Open the donation modal on `http://localhost:3000`.
-2. Select or enter an amount (>= ₹20).
-3. Select **Card / Netbanking**.
-4. Use standard Razorpay test card credentials (any valid future expiry date, CVV `123`, OTP `123456`).
-5. Upon payment success, verify that:
-   - The transaction is recorded in MongoDB/store.
+### 6.1 Testing Sovereign UPI Payments (YouPI-PG)
+1. Ensure YouPI-PG is running (`http://localhost:6100` for API and `http://localhost:7000` for Checkout Portal).
+2. Open the donation modal on `http://localhost:3000`.
+3. Select or enter an amount (>= ₹20).
+4. Click **Pay with UPI (Fast & Direct)**.
+5. In development/testing mode:
+   - Scan the dynamic QR code using any UPI simulator or banking sandbox.
+   - Or trigger a test webhook delivery payload with the matching `orderId` and HMAC-SHA256 signature.
+6. Upon payment settlement confirmation:
+   - The transaction status transitions to `Verified`.
    - The official 80G Tax Receipt modal opens with a unique `SEVA-DON-2026-XXXXXX` serial.
+   - An 80G Tax Receipt PDF/HTML email is automatically dispatched to the donor's email via Resend.
 
-### 6.2 Testing UPI QR Code Payments
+### 6.2 Testing Static UPI QR Code Payments
 1. Select **UPI / QR Code** in the donation modal.
 2. Verify the approved QR image is rendered with the copy UPI ID button.
 3. Enter transaction reference ID and submit.
@@ -190,6 +198,6 @@ The SEVA Platform is optimized for seamless deployment to Vercel:
 | :--- | :--- | :--- |
 | **Port 5000 Already in Use** | Another process is holding port 5000. | Run `netstat -ano \| findstr :5000` on Windows and terminate the process with `taskkill /PID <PID> /F`, or change `PORT=5001` in `server/.env` and update `BACKEND_URL` in `client/.env.local`. |
 | **MongoDB Atlas Connection Timeout** | Network firewall or IP whitelist issue. | In MongoDB Atlas Dashboard > Network Access, add `0.0.0.0/0` (Allow access from anywhere) or whitelist your local IP. |
-| **Razorpay Signature Verification Fails** | Mismatched `RAZORPAY_KEY_SECRET` between `.env` and account. | Ensure the exact secret key from your Razorpay dashboard corresponds to the `RAZORPAY_KEY_ID`. |
+| **YouPI Webhook Signature Fails** | Mismatched `YOUPI_WEBHOOK_SECRET` between Seva and YouPI-PG. | Ensure `YOUPI_WEBHOOK_SECRET` configured in `server/.env` exactly matches the secret configured in YouPI gateway merchant settings. Verify raw body parser is used. |
 | **CORS Policy Warning in Console** | Browser calling port 5000 directly instead of through Next.js proxy. | Ensure client-side requests use `/api/...` so they pass through `next.config.mjs` rewrites. |
 

@@ -2,7 +2,7 @@
 
 > **Document Type:** Project Progress & Status Report  
 > **Platform Version:** 1.0.0 | **Currency:** INR (₹)  
-> **Status Summary:** Fully functional full-stack monorepo with production-grade client UI, Express API, 25 database models, Razorpay gateway, dual-layer storage, and 4 dedicated role portals.
+> **Status Summary:** Fully functional full-stack monorepo with production-grade client UI, Express API, 25 database models, Sovereign UPI Payment Gateway (YouPI-PG integration), dual-layer storage, and 4 dedicated role portals.
 
 ---
 
@@ -77,10 +77,10 @@ The **SEVA Platform** has been designed, engineered, and integrated as a full-ph
   - Manual Hand Cash collection endpoint (`/cash`) for authorized field volunteers and admins.
   - Verification and note updating endpoint (`PATCH /:id`).
   - Donor email-filtered donation history retrieval.
-- [x] **Razorpay Payment Gateway (`/api/razorpay`)**:
-  - Order creation endpoint (`/create-order`) validating amount in paise.
-  - Cryptographic HMAC-SHA256 signature verification endpoint (`/verify-payment`).
-  - Payment detail query endpoint (`/payment/:paymentId`).
+- [x] **Sovereign UPI Payment Gateway (`/api/payments`)**:
+  - Payment session creation endpoint (`/create-session`) issuing dynamic UPI checkout URLs and UPI intent deep links.
+  - Cryptographic HMAC-SHA256 signed webhook endpoint (`/webhook`) validating incoming gateway events with `X-Gateway-Signature`.
+  - Payment status query endpoint (`/status/:paymentId`).
 - [x] **Payment QR Codes (`/api/payment-qr`)**:
   - Public active QR retrieval (filters out pending or rejected QRs).
   - Volunteer/staff QR submission (`POST /`).
@@ -135,7 +135,7 @@ The **SEVA Platform** has been designed, engineered, and integrated as a full-ph
 
 #### B. Interactive Modals
 - [x] **Donation Modal (`DonationModal.tsx`)**:
-  - Dual payment support: Online Razorpay Checkout (Cards, Netbanking) and direct UPI QR scanning.
+  - Direct Sovereign UPI Checkout (dynamic QR codes, deep links via YouPI-PG) and field-approved static UPI QR scanning.
   - Preset amount buttons (₹20, ₹50, ₹100, ₹250, ₹500, ₹1000) and custom input.
   - Strict ₹20 minimum donation enforcement with real-time feedback.
   - Instant meal calculation preview (e.g., ₹100 = 4 meals).
@@ -211,7 +211,7 @@ The **SEVA Platform** has been designed, engineered, and integrated as a full-ph
 | **Dual Storage Fallback** | Connects to MongoDB Atlas when URI is present, seamlessly falling back to in-memory reactive store when offline. | **Fully Implemented** |
 | **Role Access Control & Quotas** | Dedicated dashboards for Donors, Volunteers, Beneficiaries, and Admins. Quotas strictly enforce **1 Admin** and **4 Volunteers** with dynamic CMS control in Tab 14. | **Fully Implemented** |
 | **Resend Email Service** | Automated transactional emails via Resend API key for 6-digit OTP verification, official 80G tax receipts, and volunteer status updates. | **Fully Implemented** |
-| **Razorpay Integration** | Order creation, SDK modal launch, and server-side HMAC-SHA256 signature verification. | **Fully Implemented** |
+| **Sovereign UPI Gateway Integration** | Dynamic UPI session creation, checkout modal / intent, authoritative HMAC-SHA256 signed webhook processing, and automatic 80G tax receipt issuance. | **Fully Implemented** |
 
 ---
 

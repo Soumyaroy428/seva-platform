@@ -224,46 +224,90 @@ Updates donation status (`Verified`, `Verification Required`) and auditor notes.
 
 ---
 
-## 5. Razorpay Payment Gateway (`/api/razorpay`)
+## 5. Sovereign UPI Payment Gateway (`/api/payments`)
 
-### `POST /api/razorpay/create-order`
-Creates a Razorpay order in smallest currency unit (paise).
+Replaces legacy third-party aggregators with a direct Sovereign UPI Payment Gateway (YouPI-PG integration). Supports instant dynamic UPI QR generation, intent deep-links, and authoritative HMAC-SHA256 signed webhooks with observer-driven UTR settlement.
+
+### `POST /api/payments/create-session`
+Initializes a new payment session on the sovereign gateway.
 
 **Request Body:**
 ```json
 {
-  "amount": 50000,
-  "receipt": "receipt_1729440000"
+  "orderId": "SEVA-DON-1729440000",
+  "amount": "500.00",
+  "currency": "INR",
+  "customer": {
+    "name": "Aarav Sharma",
+    "email": "aarav@example.com",
+    "phoneNumber": "9876543210"
+  },
+  "metadata": {
+    "campaignId": "CMP-1",
+    "isAnonymous": false
+  }
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "paymentId": "c7942127-14e3-469a-9e4a-9359a16f903a",
+  "orderId": "SEVA-DON-1729440000",
+  "amount": "500.00",
+  "amountPaise": 50000,
+  "currency": "INR",
+  "status": "PENDING",
+  "checkoutUrl": "http://localhost:7000/pay/c7942127-14e3-469a-9e4a-9359a16f903a",
+  "upiIntent": "upi://pay?pa=seva@upi&pn=SevaPlatform&am=500.00&tr=c7942127-14e3-469a-9e4a-9359a16f903a&cu=INR"
+}
+```
+
+### `GET /api/payments/status/:paymentId`
+Queries real-time payment status and settlement verification.
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "paymentId": "c7942127-14e3-469a-9e4a-9359a16f903a",
+  "orderId": "SEVA-DON-1729440000",
+  "status": "SUCCESS",
+  "amount": "500.00",
+  "utr": "123456789012",
+  "completedAt": "2026-10-24T18:30:00.000Z"
+}
+```
+
+### `POST /api/payments/webhook`
+Receives authoritative HMAC-SHA256 signed webhook events from the gateway. Requires raw body preservation for cryptographic signature verification via header `X-Gateway-Signature` or `X-YouPI-Signature`.
+
+**Headers:**
+- `X-Gateway-Signature`: `sha256=<hex_digest>`
+- `Content-Type`: `application/json`
+
+**Payload:**
+```json
+{
+  "event": "SUCCESS",
+  "paymentId": "c7942127-14e3-469a-9e4a-9359a16f903a",
+  "orderId": "SEVA-DON-1729440000",
+  "amount": "500.00",
+  "amountPaise": 50000,
+  "currency": "INR",
+  "method": "UPI",
+  "utr": "123456789012",
+  "completedAt": "2026-10-24T18:30:00.000Z"
 }
 ```
 
 **Response (200 OK):**
 ```json
 {
-  "success": true,
-  "order_id": "order_Ox1894Zla",
-  "amount": 50000,
-  "currency": "INR"
-}
-```
-
-### `POST /api/razorpay/verify-payment`
-Cryptographically verifies Razorpay payment using HMAC-SHA256 signature verification.
-
-**Request Body:**
-```json
-{
-  "razorpay_order_id": "order_Ox1894Zla",
-  "razorpay_payment_id": "pay_Ox1920Kdj",
-  "razorpay_signature": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-}
-```
-
-**Response (200 OK):**
-```json
-{
-  "success": true,
-  "message": "Payment verified successfully."
+  "received": true,
+  "receiptGenerated": true,
+  "receiptId": "SEVA-REC-2026-482910"
 }
 ```
 

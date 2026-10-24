@@ -1,7 +1,7 @@
 # SEVA Platform — System Architecture & Technical Design
 
 > **Document Type:** System Architecture Specification  
-> **Platform Version:** 1.0.0 | **Stack:** Next.js 14, Express.js, TypeScript, Mongoose, MongoDB, Razorpay
+> **Platform Version:** 1.0.0 | **Stack:** Next.js 14, Express.js, TypeScript, Mongoose, MongoDB, Sovereign UPI Gateway (YouPI-PG)
 
 ---
 
@@ -25,7 +25,7 @@ graph TD
         Router["Express App & Middleware (CORS, JSON, MongoTracker)"]
         AuthRoute["Auth & OTP Router (/api/auth)"]
         DonationRoute["Donations & Cash Router (/api/donations)"]
-        RzpRoute["Razorpay Gateway Router (/api/razorpay)"]
+        PaymentRoute["Payment Gateway Router (/api/payments)"]
         QRRoute["Payment QR Router (/api/payment-qr)"]
         FoodRoute["Food Rescue Router (/api/food-donations)"]
         AdminRoute["Admin & CMS Routers (/api/admin, /api/campaigns...)"]
@@ -36,15 +36,17 @@ graph TD
         MongoDB["MongoDB Atlas (25 Collections via Mongoose)"]
     end
     
-    subgraph 3rdParty["External Services"]
-        RazorpayGateway["Razorpay Payment Gateway API"]
+    subgraph 3rdParty["External & Gateway Services"]
+        YoupiGateway["YouPI-PG Sovereign UPI Gateway (Ports 6100 / 7000)"]
+        ResendAPI["Resend Email API (80G Tax Receipts & OTPs)"]
     end
 
     User --> Frontend
     Frontend --> Rewrites
     Rewrites --> Router
-    Router --> AuthRoute & DonationRoute & RzpRoute & QRRoute & FoodRoute & AdminRoute
-    RzpRoute <--> RazorpayGateway
+    Router --> AuthRoute & DonationRoute & PaymentRoute & QRRoute & FoodRoute & AdminRoute
+    PaymentRoute <--> YoupiGateway
+    DonationRoute & PaymentRoute --> ResendAPI
     DonationRoute & QRRoute & FoodRoute & AdminRoute --> HybridStore
     HybridStore <--> MongoDB
 ```
@@ -176,49 +178,53 @@ The server initializes as an Express application configured with:
 
 ---
 
-## 6. Payment Processing Flow (Razorpay + UPI)
+## 6. Payment Processing Flow (Sovereign UPI Gateway / YouPI-PG)
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Donor
     participant Client as Frontend (DonationModal)
-    participant Server as Backend API (/api/razorpay)
-    participant Razorpay as Razorpay Payment Gateway
-    participant Store as Seva DB & 80G Receipt
+    participant Server as Backend API (/api/payments)
+    participant YoupiGateway as YouPI Sovereign Gateway (:6100 / :7000)
+    participant Observers as Banking Observers (SMS / Android)
+    participant Store as Seva DB & Resend Email
 
-    Donor->>Client: Selects Amount (>= ₹20) & enters details
-    alt Online Card / Netbanking
-        Client->>Server: POST /api/razorpay/create-order { amount: ₹ * 100 }
-        Server->>Razorpay: rzp.orders.create({ amount, currency: 'INR' })
-        Razorpay-->>Server: Return order_id
-        Server-->>Client: Return order_id & amount
-        Client->>Razorpay: Open Razorpay Checkout modal
-        Donor->>Razorpay: Completes payment
-        Razorpay-->>Client: Returns payment_id & signature
-        Client->>Server: POST /api/razorpay/verify-payment { order_id, payment_id, signature }
-        Server->>Server: Verify HMAC-SHA256 signature
-        Server-->>Client: Verification Success
-        Client->>Server: POST /api/donations { donor details, paymentMethod: 'Card', txnId }
-        Server->>Store: Create Donation & generate 80G Receipt ID
-        Store-->>Client: Return Donation Record
-    else Direct UPI QR Scan
-        Client->>Donor: Displays approved UPI QR & UPI ID
+    Donor->>Client: Selects Amount (>= ₹20) & enters donor info
+    alt Sovereign Dynamic UPI Checkout (YouPI-PG)
+        Client->>Server: POST /api/payments/create-session { amount, orderId, donor }
+        Server->>YoupiGateway: POST /api/v1/payments { amount, orderId, customer }
+        YoupiGateway-->>Server: Return { paymentId, checkoutUrl, upiIntent }
+        Server-->>Client: Return checkout session & QR data
+        Client->>Donor: Displays dynamic UPI QR code & UPI Intent trigger
+        Donor->>Donor: Completes payment in any UPI App (GPay, PhonePe, Paytm, BHIM)
+        Observers->>YoupiGateway: Detects bank credit notification with UTR
+        YoupiGateway->>YoupiGateway: Matches payment session & validates UTR
+        YoupiGateway->>Server: POST /api/payments/webhook [HMAC-SHA256: X-Gateway-Signature]
+        Server->>Server: Verifies raw HMAC-SHA256 with YOUPI_WEBHOOK_SECRET
+        Server->>Store: Update Donation status to "Verified" & store UTR
+        Server->>Store: Trigger automated 80G Tax Receipt generation
+        Store-->>Donor: Emails official 80G Receipt via Resend API
+        Client->>Server: Polls /api/payments/status/:paymentId
+        Server-->>Client: Returns { status: 'SUCCESS', utr }
+        Client->>Donor: Opens Official 80G Tax Receipt Modal (ReceiptModal)
+    else Direct Static UPI QR Scan
+        Client->>Donor: Displays approved static UPI QR & UPI ID
         Donor->>Client: Scans via UPI App & enters UTR / TXN ID
         Client->>Server: POST /api/donations { donor details, paymentMethod: 'UPI', txnId }
-        Server->>Store: Create Donation & generate 80G Receipt ID
+        Server->>Store: Create Donation (Status: Verification Required) & generate 80G Receipt ID
         Store-->>Client: Return Donation Record
+        Client->>Donor: Opens Official 80G Tax Receipt Modal (ReceiptModal)
     end
-    Client->>Donor: Opens Official 80G Tax Receipt Modal (ReceiptModal)
 ```
 
 ---
 
 ## 7. Security, Governance & Anti-Fraud Architecture
 
-1. **Cryptographic Signature Verification**: Razorpay webhooks and post-payment payloads must pass HMAC-SHA256 hash checks with the secret key before a donation is recorded as verified.
-2. **UPI QR Approval Gate**: Any QR uploaded by volunteers or field teams enters the database in `Pending` state. The public API `/api/payment-qr` filters by `status === 'Active'`. Only an administrator reviewing Tab 15 can promote it to `Active`.
+1. **Authoritative HMAC-SHA256 Webhook Verification**: YouPI-PG webhooks are cryptographically authenticated via `X-Gateway-Signature` (or `X-YouPI-Signature`) using the shared `YOUPI_WEBHOOK_SECRET` on raw unparsed request payloads before marking any donation as settled.
+2. **UPI QR Approval Gate**: Any static QR uploaded by volunteers or field teams enters the database in `Pending` state. The public API `/api/payment-qr` filters by `status === 'Active'`. Only an administrator reviewing Tab 15 can promote it to `Active`.
 3. **Strict Minimum Contribution Check**: Enforced at the root schema level (`min: 20`), API route level, and client input validation level.
 4. **Food Safety Assurance**: Expired food donations are mathematically rejected by comparing `safeUntil` against the server timestamp.
-5. **Capacity Quotas**: Structural guards on user registration prevent rogue escalation into administrative roles without explicit quota clearance.
+5. **Capacity Quotas & Role Separation**: Structural guards on user registration prevent rogue escalation into administrative roles without explicit quota clearance (strictly 1 Admin and 4 Volunteers governed under CMS and environment variables, completely separated from the unlimited donor community).
 
