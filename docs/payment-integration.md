@@ -143,3 +143,4 @@ Upon successful HMAC signature verification, the SEVA backend executes the follo
 - [x] **Strict ₹20 Floor**: Server rejects requests below ₹20 with HTTP 400.
 - [x] **Raw Body Preservation**: Express middleware captures the raw Buffer for signature validation before JSON parsing.
 - [x] **Idempotency**: Webhook deliveries deduplicate by `paymentId` and `orderId` to prevent multiple receipts for the same bank credit.
+

@@ -372,32 +372,41 @@ Update `client/src/components/DonationModal.tsx`:
 
 ## 5. Environment Variable Reference
 
-### Backend (`server/.env`):
+### Current Active Payment Integration Environment Variables (Razorpay):
+Used for current live cloud / Vercel operations:
+
+#### Backend (`server/.env`):
 ```env
-# Sovereign UPI Payment Gateway (YouPI-PG)
-YOUPI_API_URL=http://localhost:6100
-YOUPI_MERCHANT_ID=00000000-0000-0000-0000-000000000001
-YOUPI_WEBHOOK_SECRET=your_super_secret_webhook_hmac_key_here
-YOUPI_API_KEY=your_optional_merchant_api_key_here
-YOUPI_CHECKOUT_URL=http://localhost:7000
+# Razorpay Payment Gateway Credentials (Test Keys)
+RAZORPAY_KEY_ID=rzp_test_TcmMNzUCymX672
+RAZORPAY_KEY_SECRET=IJFFj3f9391pf3FiDiApAIHZ
 
 # Resend Transactional Email API
-RESEND_API_KEY=re_your_resend_api_key
-RESEND_FROM_EMAIL=SEVA Platform <receipts@seva.ngo>
+RESEND_API_KEY=re_123456789_placeholder
+RESEND_FROM_EMAIL=SEVA Platform <onboarding@resend.dev>
 
-# Governance Quotas (Strictly enforced)
+# Governance Quotas (CMS & Env Controlled)
 MAX_ADMINS=1
 MAX_VOLUNTEERS=4
 ```
 
-### Frontend (`client/.env.local`):
+#### Frontend (`client/.env.local`):
 ```env
 # Backend API Target (Rewritten via Next.js proxy)
 BACKEND_URL=http://localhost:5000
 
-# Public Sovereign Checkout URL
-NEXT_PUBLIC_YOUPI_CHECKOUT_URL=http://localhost:7000
+# Public Razorpay Key for Frontend Checkout SDK
+NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_TcmMNzUCymX672
+
+# Governance Quotas
+NEXT_PUBLIC_MAX_ADMINS=1
+NEXT_PUBLIC_MAX_VOLUNTEERS=4
 ```
+
+### Sovereign UPI Migration Variables (When activating YouPI-PG):
+When transitioning to the peer-to-peer Sovereign Gateway:
+- Replace `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` with `YOUPI_API_URL`, `YOUPI_MERCHANT_ID`, and `YOUPI_WEBHOOK_SECRET`.
+- Replace `NEXT_PUBLIC_RAZORPAY_KEY_ID` with `NEXT_PUBLIC_YOUPI_CHECKOUT_URL`.
 
 ---
 
@@ -424,3 +433,4 @@ When prompted to begin implementation:
 4. Refactor `DonationModal.tsx` to mount the Sovereign UPI QR and deep link experience.
 5. Verify end-to-end with unit/integration tests and compile builds cleanly (`tsc` and `next build`).
 6. Commit to Git and trigger redeployment to Vercel.
+
