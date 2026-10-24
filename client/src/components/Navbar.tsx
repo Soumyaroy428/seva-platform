@@ -108,38 +108,53 @@ export default function Navbar({ onOpenDonate, onOpenFoodDonate, onOpenVolunteer
               </button>
 
               {portalDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2.5 z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="px-3.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Volunteers & Admins (CMS & Env)
+                  </div>
                   <Link
                     href="/admin"
                     onClick={() => setPortalDropdownOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-700"
+                    className="flex items-center justify-between px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-700 transition-colors"
                   >
-                    <ShieldCheck className="w-4 h-4 text-orange-600" />
-                    Admin Control Center
-                  </Link>
-                  <Link
-                    href="/donor"
-                    onClick={() => setPortalDropdownOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-700"
-                  >
-                    <Heart className="w-4 h-4 text-rose-500" />
-                    Donor Impact Portal
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-purple-600" />
+                      <span>Admin Console</span>
+                    </div>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">1 Slot</span>
                   </Link>
                   <Link
                     href="/volunteer"
                     onClick={() => setPortalDropdownOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-700"
+                    className="flex items-center justify-between px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-700 transition-colors"
                   >
-                    <UserCheck className="w-4 h-4 text-emerald-600" />
-                    Volunteer Operations
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="w-4 h-4 text-emerald-600" />
+                      <span>Volunteer Hub</span>
+                    </div>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">4 Slots</span>
+                  </Link>
+
+                  <div className="my-1.5 border-t border-slate-100" />
+
+                  <div className="px-3.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Separate Donor Community
+                  </div>
+                  <Link
+                    href="/donor"
+                    onClick={() => setPortalDropdownOpen(false)}
+                    className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-700 transition-colors"
+                  >
+                    <Heart className="w-4 h-4 text-rose-500" />
+                    <span>Donor Impact Portal</span>
                   </Link>
                   <Link
                     href="/beneficiary"
                     onClick={() => setPortalDropdownOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-700"
+                    className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-orange-50 hover:text-orange-700 transition-colors"
                   >
                     <Utensils className="w-4 h-4 text-indigo-600" />
-                    Beneficiary Digital Pass
+                    <span>Beneficiary Pass</span>
                   </Link>
                 </div>
               )}

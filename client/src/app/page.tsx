@@ -218,8 +218,11 @@ export default function HomePage() {
         {/* 10. Frequently Asked Questions */}
         <FAQSection faqs={faqs} />
 
-        {/* 11. Bottom Official Administrator Portal & Governance */}
-        <BottomAdminPortal />
+        {/* 11. Volunteers & Administrators Hub (CMS & Env Governed) */}
+        <BottomAdminPortal
+          onOpenDonate={() => handleOpenDonate()}
+          onOpenVolunteer={() => setVolunteerOpen(true)}
+        />
       </main>
 
       {/* Comprehensive Footer */}

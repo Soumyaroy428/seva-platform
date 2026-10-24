@@ -408,8 +408,8 @@ class SevaServerStore {
     totalPeopleOffset: 48200,
     activeVolunteersOffset: 840,
     targetDonationGoal: 1050000,
-    maxAdmins: 1,
-    maxVolunteers: 4
+    maxAdmins: process.env.MAX_ADMINS ? Number(process.env.MAX_ADMINS) : 1,
+    maxVolunteers: process.env.MAX_VOLUNTEERS ? Number(process.env.MAX_VOLUNTEERS) : 4
   };
 
   private verifiedMetrics: IVerifiedMetrics = {
@@ -949,7 +949,7 @@ class SevaServerStore {
   updateVolunteerStatus(id: string, status: any, reviewer: string) {
     const v = this.volunteers.find(vol => vol.id === id || vol.volunteerId === id);
     if (v) {
-      const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : 4;
+      const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : (process.env.MAX_VOLUNTEERS ? Number(process.env.MAX_VOLUNTEERS) : 4);
       if (status === 'Approved' && v.status !== 'Approved') {
         const approvedCount = this.volunteers.filter(vol => vol.status === 'Approved').length;
         if (approvedCount >= maxVolunteers) {
@@ -1816,8 +1816,8 @@ class SevaServerStore {
     const adminUsers = this.users.filter(u => u.role === 'admin');
     const volUsers = this.users.filter(u => u.role === 'volunteer');
     const approvedVols = this.volunteers.filter(v => v.status === 'Approved');
-    const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : 1;
-    const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : 4;
+    const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : (process.env.MAX_ADMINS ? Number(process.env.MAX_ADMINS) : 1);
+    const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : (process.env.MAX_VOLUNTEERS ? Number(process.env.MAX_VOLUNTEERS) : 4);
 
     return {
       admins: {
@@ -1885,8 +1885,8 @@ class SevaServerStore {
         throw new Error(`An account already exists with this ${type === 'phone' ? 'mobile number' : 'email'}. Please sign in with OTP instead.`);
       }
 
-      const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : 1;
-      const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : 4;
+      const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : (process.env.MAX_ADMINS ? Number(process.env.MAX_ADMINS) : 1);
+      const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : (process.env.MAX_VOLUNTEERS ? Number(process.env.MAX_VOLUNTEERS) : 4);
 
       if (registerData?.role === 'admin') {
         const currentAdmins = this.users.filter(u => u.role === 'admin').length;
@@ -2020,8 +2020,8 @@ class SevaServerStore {
     }
 
     // Role capacity enforcement
-    const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : 1;
-    const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : 4;
+    const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : (process.env.MAX_ADMINS ? Number(process.env.MAX_ADMINS) : 1);
+    const maxVolunteers = Number(this.settings.maxVolunteers) > 0 ? Number(this.settings.maxVolunteers) : (process.env.MAX_VOLUNTEERS ? Number(process.env.MAX_VOLUNTEERS) : 4);
     if (data.role === 'admin') {
       const currentAdmins = this.users.filter(u => u.role === 'admin').length;
       if (currentAdmins >= maxAdmins) {

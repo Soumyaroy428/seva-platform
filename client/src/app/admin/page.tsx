@@ -1746,7 +1746,7 @@ function AdminDashboardContent() {
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-teal-500" />
-            <span>Volunteer Desk</span>
+            <span>Volunteers & Admins</span>
             {pendingVols.length > 0 && (
               <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
                 {pendingVols.length}
@@ -4836,18 +4836,62 @@ function AdminDashboardContent() {
         {/* ============================================================ */}
         {activeTab === 'volunteers' && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            {/* 1. Administrator Governance Status Card (1 Admin Slot) */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-50/80 via-slate-50 to-purple-50/80 border border-purple-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">Platform Administrator Desk</h3>
+                    <p className="text-[11px] text-purple-700 font-semibold">Strict 1 Admin Ceiling • Governed by CMS & Env (MAX_ADMINS=1)</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 pt-1">
+                  Active Admin: <strong className="text-slate-900">{user?.name || 'Primary Administrator'}</strong> ({user?.email || 'admin@seva.org'}) • Status: <span className="text-emerald-700 font-bold">Active & Authenticated</span>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                  ADMIN QUOTA: {quotas?.admins.current || 1} / {quotas?.admins.max || 1} SLOT
+                </span>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className="px-3 py-1 text-xs font-bold text-purple-700 hover:text-purple-900 hover:bg-purple-100/60 rounded-lg transition-colors border border-purple-200"
+                >
+                  Edit in Settings
+                </button>
+              </div>
+            </div>
+
+            {/* Note clarifying separate Donor community */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 font-medium">
+                <Heart className="w-4 h-4 text-rose-500 fill-rose-500 shrink-0" />
+                <span><strong>Separate Donor System:</strong> Public donors are completely open and have zero quota limitations.</span>
+              </span>
+              <button
+                onClick={() => setActiveTab('overview')}
+                className="text-xs text-orange-600 font-bold hover:underline shrink-0"
+              >
+                View Donor History
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4 pt-2">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-black text-slate-900">Volunteer Approval & Roster Desk</h2>
+                  <h2 className="text-lg font-black text-slate-900">Field Volunteers Roster & Approval Desk</h2>
                   <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold ${
                     quotas?.volunteers.isFull ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
                   }`}>
-                    Capacity: {quotas ? quotas.volunteers.current : volunteers.length} / 4 Max
+                    Capacity: {quotas ? quotas.volunteers.current : volunteers.length} / {quotas?.volunteers.max || 4} Max (ENV: MAX_VOLUNTEERS={quotas?.volunteers.max || 4})
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Platform policy strictly caps volunteers at 4 members. Once 4 approved volunteers exist, further approvals are blocked.
+                  Platform policy strictly caps volunteers at {quotas?.volunteers.max || 4} members via CMS & environment. Once {quotas?.volunteers.max || 4} approved volunteers exist, further approvals are blocked.
                 </p>
               </div>
 
