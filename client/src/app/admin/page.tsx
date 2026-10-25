@@ -70,6 +70,7 @@ import {
   IRightHeroCard,
   IVerifiedMetrics
 } from '@/lib/types';
+import PaymentManagementSection from '@/components/admin/PaymentManagementSection';
 
 interface IQuotaInfo {
   admins: {
@@ -91,6 +92,7 @@ interface IQuotaInfo {
 
 type TabType =
   | 'overview'
+  | 'payments'
   | 'campaigns'
   | 'hero-cards'
   | 'announcement-strip'
@@ -1755,6 +1757,21 @@ function AdminDashboardContent() {
           </button>
 
           <button
+            onClick={() => setActiveTab('payments')}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'payments' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Payments & Approvals</span>
+            {recentDonations.filter(d => d.status === 'PENDING_VERIFICATION').length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
+                {recentDonations.filter(d => d.status === 'PENDING_VERIFICATION').length}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('settings')}
             className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'settings' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
@@ -2025,7 +2042,16 @@ function AdminDashboardContent() {
 
             {/* Recent Donations Table */}
             <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900">Recent Donations (Verified & Offline Hand Cash)</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900">Recent Donations (Verified & Offline Hand Cash)</h3>
+                <button
+                  onClick={() => setActiveTab('payments')}
+                  className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1"
+                >
+                  <span>Open Payment Management</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-600 uppercase font-bold text-[10px]">
@@ -5337,6 +5363,15 @@ function AdminDashboardContent() {
         {/* ============================================================ */}
         {/* TAB 11: AUDIT LOGS */}
         {/* ============================================================ */}
+        {activeTab === 'payments' && (
+          <PaymentManagementSection
+            currentUser={user}
+            campaigns={campaigns}
+            qrs={qrs}
+            onRefreshStats={fetchAdminData}
+          />
+        )}
+
         {activeTab === 'audit' && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-6 shadow-sm">
             <div className="border-b border-slate-100 pb-4">

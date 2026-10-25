@@ -3,6 +3,8 @@ import {
   VolunteerModel,
   CampaignModel,
   DonationModel,
+  DonorModel,
+  PaymentModel,
   SettingModel,
   SuccessStoryModel,
   AuditLogModel,
@@ -14,7 +16,7 @@ import {
   DistributionEventModel
 } from '../models';
 
-import { sendOtpEmail, sendDonationReceiptEmail, sendVolunteerStatusEmail } from './email';
+import { sendOtpEmail, sendDonationReceiptEmail, sendVolunteerStatusEmail, sendSmsNotification, sendDonationRejectedNotification } from './email';
 
 export interface IRightHeroCard {
   id?: string;
@@ -136,6 +138,16 @@ export interface IDonation {
   paymentMethod: string;
   status: string;
   transactionId?: string;
+  currency?: string;
+  gatewayOrderId?: string;
+  gatewayPaymentId?: string;
+  message?: string;
+  proofFile?: string;
+  verificationSource?: string;
+  rejectionReason?: string;
+  receiptId?: string;
+  notificationsSent?: { email?: boolean; sms?: boolean };
+  auditHistory?: Array<{ action: string; timestamp: string; actor: string; note?: string }>;
   isAnonymous?: boolean;
   recurringFrequency?: string;
   collectedBy?: string;
@@ -846,19 +858,33 @@ class SevaServerStore {
     }
     const year = new Date().getFullYear();
     const randomNum = Math.floor(100000 + Math.random() * 900000);
-    const donationId = `SEVA-DON-${year}-${randomNum}`;
+    const donationId = (data as any).donationId || `SEVA-DON-${year}-${randomNum}`;
     const newDonation: IDonation = {
       ...data,
       id: `don-${Date.now()}`,
       donationId,
-      status: 'Successful',
+      status: data.status || 'PENDING',
+      currency: data.currency || 'INR',
+      receiptId: (data.status === 'SUCCESS' || data.status === 'Successful' || data.status === 'Verified') ? (data.receiptId || donationId) : undefined,
+      notificationsSent: data.notificationsSent || { email: false, sms: false },
+      auditHistory: data.auditHistory || [
+        {
+          action: 'DONATION_INITIALIZED',
+          timestamp: new Date().toISOString(),
+          actor: data.donorEmail || 'Donor',
+          note: `Initialized donation of ₹${data.amount} (Status: ${data.status || 'PENDING'})`
+        }
+      ],
       createdAt: new Date().toISOString()
     };
     this.donations.unshift(newDonation);
     this.logAudit(data.donorEmail, 'DONATION_SUCCESS', 'Donation', `Processed ₹${data.amount} (ID: ${donationId})`);
 
     // Dispatch 80G Tax Receipt via Resend
-    if (newDonation.donorEmail && newDonation.donorEmail.includes('@')) {
+    const isSuccessInit = newDonation.status === 'SUCCESS' || newDonation.status === 'Successful' || newDonation.status === 'Verified';
+    if (isSuccessInit && newDonation.donorEmail && newDonation.donorEmail.includes('@')) {
+      this.syncCampaignDonationTotals(newDonation);
+      if (newDonation.notificationsSent) newDonation.notificationsSent.email = true;
       sendDonationReceiptEmail({
         to: newDonation.donorEmail,
         donation: {
@@ -881,6 +907,15 @@ class SevaServerStore {
       donorEmail: newDonation.donorEmail,
       donorPhone: newDonation.donorPhone,
       amount: newDonation.amount,
+      currency: newDonation.currency || 'INR',
+      gatewayOrderId: newDonation.gatewayOrderId,
+      gatewayPaymentId: newDonation.gatewayPaymentId,
+      message: newDonation.message,
+      proofFile: newDonation.proofFile,
+      verificationSource: newDonation.verificationSource,
+      receiptId: newDonation.receiptId,
+      notificationsSent: newDonation.notificationsSent,
+      auditHistory: newDonation.auditHistory,
       campaignId: newDonation.campaignId,
       campaignTitle: newDonation.campaignTitle,
       paymentMethod: newDonation.paymentMethod || 'UPI',
@@ -1016,7 +1051,7 @@ class SevaServerStore {
     }
     const year = new Date().getFullYear();
     const randomNum = Math.floor(100000 + Math.random() * 900000);
-    const donationId = `SEVA-DON-${year}-${randomNum}`;
+    const donationId = (data as any).donationId || `SEVA-DON-${year}-${randomNum}`;
 
     const newDonation: IDonation = {
       id: `don-${Date.now()}`,
@@ -1074,6 +1109,15 @@ class SevaServerStore {
       donorEmail: newDonation.donorEmail,
       donorPhone: newDonation.donorPhone,
       amount: newDonation.amount,
+      currency: newDonation.currency || 'INR',
+      gatewayOrderId: newDonation.gatewayOrderId,
+      gatewayPaymentId: newDonation.gatewayPaymentId,
+      message: newDonation.message,
+      proofFile: newDonation.proofFile,
+      verificationSource: newDonation.verificationSource,
+      receiptId: newDonation.receiptId,
+      notificationsSent: newDonation.notificationsSent,
+      auditHistory: newDonation.auditHistory,
       campaignId: newDonation.campaignId,
       campaignTitle: newDonation.campaignTitle,
       paymentMethod: 'Cash',
@@ -1096,20 +1140,139 @@ class SevaServerStore {
     return newDonation;
   }
 
-  // Update existing donation (status, verification, notes)
-  updateDonation(id: string, updates: { status?: string; receiptNote?: string }, reviewer: string) {
+  // Synchronize campaign and donor totals strictly on verified SUCCESS
+  syncCampaignDonationTotals(donation: IDonation) {
+    if (!donation || !donation.amount) return;
+    const campaignId = donation.campaignId;
+    const campaignTitle = donation.campaignTitle;
+
+    if (campaignId || campaignTitle) {
+      const camp = this.campaigns.find(c => (campaignId && c.id && c.id.toLowerCase() === campaignId.toLowerCase()) || (campaignTitle && c.title && c.title.toLowerCase() === campaignTitle.toLowerCase()) || (campaignId && c.slug && c.slug.toLowerCase() === campaignId.toLowerCase()));
+      if (camp) {
+        camp.collectedAmount = (camp.collectedAmount || 0) + donation.amount;
+        camp.mealsSupported = (camp.mealsSupported || 0) + Math.floor(donation.amount / 25);
+        camp.donorCount += 1;
+      }
+      CampaignModel.updateOne(
+        { $or: [{ id: campaignId }, { slug: campaignId }, { title: campaignTitle }] },
+        { $inc: { collectedAmount: donation.amount, mealsSupported: Math.floor(donation.amount / 25), donorCount: 1 } }
+      ).catch((err: any) => console.warn('⚠️ MongoDB Atlas Campaign update error:', err.message));
+    }
+
+    if (donation.donorEmail) {
+      const user = this.users.find(u => u.email.toLowerCase() === donation.donorEmail.toLowerCase());
+      if (user) {
+        DonorModel.updateOne(
+          { userId: user.id },
+          { $inc: { totalDonated: donation.amount, donationCount: 1 }, $set: { lastDonationDate: new Date() } }
+        ).catch(() => {});
+      }
+    }
+  }
+
+  // Update existing donation (status, verification, notes, rejection reasons)
+  updateDonation(id: string, updates: { 
+    status?: string; 
+    receiptNote?: string;
+    transactionId?: string;
+    rejectionReason?: string;
+    proofFile?: string;
+    verificationSource?: string;
+  }, reviewer: string) {
     const don = this.donations.find(d => d.id === id || d.donationId === id);
     if (!don) return null;
+    const previousStatus = don.status;
+    const isPreviousSuccess = previousStatus === 'SUCCESS' || previousStatus === 'Successful' || previousStatus === 'Verified';
+
     if (updates.status) don.status = updates.status;
     if (updates.receiptNote !== undefined) don.receiptNote = updates.receiptNote;
+    if (updates.transactionId) don.transactionId = updates.transactionId;
+    if (updates.rejectionReason) don.rejectionReason = updates.rejectionReason;
+    if (updates.proofFile) don.proofFile = updates.proofFile;
+    if (updates.verificationSource) don.verificationSource = updates.verificationSource;
     don.verifiedBy = reviewer;
     don.verifiedAt = new Date().toISOString();
-    this.logAudit(reviewer, 'DONATION_UPDATED', 'Donation', `Updated donation ${don.donationId} status to ${updates.status || 'Verified'}`);
+
+    if (!don.auditHistory) don.auditHistory = [];
+    don.auditHistory.push({
+      action: 'STATUS_UPDATED',
+      timestamp: new Date().toISOString(),
+      actor: reviewer,
+      note: `Status changed from ${previousStatus} to ${don.status}${updates.rejectionReason ? ` (Reason: ${updates.rejectionReason})` : ''}`
+    });
+
+    const isNowSuccess = don.status === 'SUCCESS' || don.status === 'Successful' || don.status === 'Verified';
+    if (isNowSuccess && !isPreviousSuccess) {
+      don.receiptId = don.receiptId || don.donationId;
+      this.syncCampaignDonationTotals(don);
+
+      if (don.donorEmail && don.donorEmail.includes('@') && !don.notificationsSent?.email) {
+        if (!don.notificationsSent) don.notificationsSent = { email: false, sms: false };
+        don.notificationsSent.email = true;
+        sendDonationReceiptEmail({
+          to: don.donorEmail,
+          donation: {
+            donationId: don.donationId,
+            donorName: don.donorName,
+            amount: don.amount,
+            campaignTitle: don.campaignTitle || 'General Hunger Relief & Kitchen Support',
+            paymentMethod: don.paymentMethod || 'UPI',
+            transactionId: don.transactionId,
+            createdAt: don.createdAt
+          }
+        }).catch(err => console.warn('Resend 80G Receipt update dispatch error:', err));
+      }
+
+      if (don.donorPhone && !don.notificationsSent?.sms) {
+        if (!don.notificationsSent) don.notificationsSent = { email: false, sms: false };
+        don.notificationsSent.sms = true;
+        sendSmsNotification({
+          toPhone: don.donorPhone,
+          message: `🙏 Thank you for supporting Seva! Your donation of ₹${don.amount} has been successfully received. Donation ID: ${don.donationId}. Campaign: ${don.campaignTitle || 'General Hunger Relief'}. Your contribution helps us support people in need. — Team Seva`,
+          type: 'DONATION_SUCCESS'
+        }).catch(err => console.warn('Success SMS dispatch warning:', err));
+      }
+    }
+
+    if ((don.status === 'REJECTED' || don.status === 'FAILED') && !don.notificationsSent?.email) {
+      if (don.donorEmail && don.donorEmail.includes('@')) {
+        if (!don.notificationsSent) don.notificationsSent = { email: false, sms: false };
+        don.notificationsSent.email = true;
+        sendDonationRejectedNotification({
+          toEmail: don.donorEmail,
+          toPhone: don.donorPhone,
+          donation: {
+            donationId: don.donationId,
+            donorName: don.donorName,
+            amount: don.amount,
+            campaignTitle: don.campaignTitle || 'General Hunger Relief & Kitchen Support',
+            transactionId: don.transactionId
+          },
+          rejectionReason: updates.rejectionReason || 'Transaction could not be verified against bank statement'
+        }).catch(err => console.warn('Rejection notification dispatch warning:', err));
+      }
+    }
+
+    this.logAudit(reviewer, 'DONATION_UPDATED', 'Donation', `Updated donation ${don.donationId} status to ${don.status}`);
 
     // Persist to MongoDB Atlas
     DonationModel.updateOne(
       { $or: [{ id: don.id }, { donationId: don.donationId }] },
-      { $set: { status: don.status, receiptNote: don.receiptNote, verifiedBy: don.verifiedBy, verifiedAt: new Date() } }
+      { 
+        $set: { 
+          status: don.status, 
+          receiptNote: don.receiptNote, 
+          transactionId: don.transactionId,
+          rejectionReason: don.rejectionReason,
+          proofFile: don.proofFile,
+          verificationSource: don.verificationSource,
+          receiptId: don.receiptId,
+          notificationsSent: don.notificationsSent,
+          auditHistory: don.auditHistory,
+          verifiedBy: don.verifiedBy, 
+          verifiedAt: new Date() 
+        } 
+      }
     ).catch((err: any) => console.warn('⚠️ MongoDB Atlas Donation update error:', err.message));
 
     return don;
@@ -2130,12 +2293,96 @@ class SevaServerStore {
     return true;
   }
 
+  initEnvAccounts() {
+    // 1. CMS Administrator from environment
+    const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
+    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456';
+    let admin = this.users.find(u => u.email.toLowerCase() === envAdminEmail || u.role === 'admin');
+    if (!admin) {
+      admin = {
+        id: 'admin_cms_master',
+        name: 'Chief Administrator (CMS)',
+        email: envAdminEmail,
+        password: envAdminPass,
+        role: 'admin',
+        phone: '+91 9876543210',
+        area: 'Central Command & CMS Operations',
+        createdAt: new Date().toISOString()
+      };
+      this.users.unshift(admin);
+    } else {
+      admin.email = envAdminEmail;
+      admin.password = envAdminPass;
+      admin.role = 'admin';
+    }
+
+    // 2. All 4 CMS Field Volunteers from environment
+    for (let i = 1; i <= 4; i++) {
+      const volEmail = (process.env[`CMS_VOLUNTEER_${i}_EMAIL`] || `volunteer${i}@seva.org`).trim().toLowerCase();
+      const volPass = process.env[`CMS_VOLUNTEER_${i}_PASSWORD`] || `Vol@2026_Slot${i}`;
+      const volName = process.env[`CMS_VOLUNTEER_${i}_NAME`] || `Field Volunteer ${i}`;
+      const volPhone = (process.env[`CMS_VOLUNTEER_${i}_PHONE`] || `+91 987654000${i}`).trim();
+      const volArea = process.env[`CMS_VOLUNTEER_${i}_AREA`] || `Relief Zone ${i}`;
+      const volId = `SEVA-VOL-2026-000${i}`;
+
+      let volUser = this.users.find(u => (u.email && u.email.toLowerCase() === volEmail) || u.volunteerId === volId);
+      if (!volUser) {
+        volUser = {
+          id: `usr-vol-${i}`,
+          volunteerId: volId,
+          name: volName,
+          email: volEmail,
+          password: volPass,
+          role: 'volunteer',
+          volunteerStatus: 'Approved',
+          phone: volPhone,
+          area: volArea,
+          skills: ['Field Operations', 'Food Distribution'],
+          availability: 'Full-Time Active',
+          createdAt: new Date().toISOString()
+        };
+        this.users.push(volUser);
+      } else {
+        volUser.email = volEmail;
+        volUser.password = volPass;
+        volUser.role = 'volunteer';
+        volUser.volunteerStatus = 'Approved';
+        volUser.volunteerId = volId;
+      }
+
+      let volRoster = this.volunteers.find(v => v.volunteerId === volId || (v.email && v.email.toLowerCase() === volEmail));
+      if (!volRoster) {
+        volRoster = {
+          id: `vol-${i}`,
+          volunteerId: volId,
+          name: volName,
+          email: volEmail,
+          phone: volPhone,
+          area: volArea,
+          skills: ['Field Operations', 'Food Distribution'],
+          availability: 'Full-Time Active',
+          status: 'Approved',
+          hoursLogged: 0,
+          tasksCompleted: 0,
+          joinedDate: new Date().toISOString().split('T')[0]
+        };
+        this.volunteers.push(volRoster);
+      } else {
+        volRoster.status = 'Approved';
+        volRoster.name = volName;
+        volRoster.phone = volPhone;
+        volRoster.area = volArea;
+      }
+    }
+  }
+
   authenticateUser(identifier: string, pass: string) {
+    this.initEnvAccounts();
     const norm = this.normalizeIdentifier(identifier);
     const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
     const envAdminPass = process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456';
 
-    // Direct CMS Administrator authentication from Environment
+    // 1. Direct CMS Administrator authentication from Environment
     if (norm.type === 'email' && norm.key.toLowerCase() === envAdminEmail && pass === envAdminPass) {
       let admin = this.users.find(u => u.email.toLowerCase() === envAdminEmail || u.role === 'admin');
       if (!admin) {
@@ -2159,6 +2406,56 @@ class SevaServerStore {
       this.logAudit(admin.email, 'USER_LOGIN', 'User', 'Logged in as Chief Administrator (CMS via Env)');
       return safeUser;
     }
+
+    // 2. Direct CMS Field Volunteers authentication from Environment (4 Slots)
+    for (let i = 1; i <= 4; i++) {
+      const volEmail = (process.env[`CMS_VOLUNTEER_${i}_EMAIL`] || `volunteer${i}@seva.org`).trim().toLowerCase();
+      const volPass = process.env[`CMS_VOLUNTEER_${i}_PASSWORD`] || `Vol@2026_Slot${i}`;
+      const volPhone = (process.env[`CMS_VOLUNTEER_${i}_PHONE`] || `+91 987654000${i}`).trim();
+      const volId = `SEVA-VOL-2026-000${i}`;
+
+      const matchesEmail = norm.type === 'email' && norm.key.toLowerCase() === volEmail;
+      const cleanPhoneDigits = volPhone.replace(/\D/g, '');
+      const matchesPhone = norm.type === 'phone' && cleanPhoneDigits.endsWith(norm.key);
+
+      if ((matchesEmail || matchesPhone) && pass === volPass) {
+        let vol = this.users.find(u => (u.email && u.email.toLowerCase() === volEmail) || u.volunteerId === volId);
+        if (!vol) {
+          vol = {
+            id: `usr-vol-${i}`,
+            volunteerId: volId,
+            name: process.env[`CMS_VOLUNTEER_${i}_NAME`] || `Field Volunteer ${i}`,
+            email: volEmail,
+            password: volPass,
+            role: 'volunteer',
+            volunteerStatus: 'Approved',
+            phone: volPhone,
+            area: process.env[`CMS_VOLUNTEER_${i}_AREA`] || `Relief Zone ${i}`,
+            skills: ['Field Operations', 'Food Distribution'],
+            availability: 'Full-Time Active',
+            createdAt: new Date().toISOString()
+          };
+          this.users.push(vol);
+        } else {
+          vol.role = 'volunteer';
+          vol.volunteerStatus = 'Approved';
+          vol.volunteerId = volId;
+          vol.password = volPass;
+        }
+
+        let volRoster = this.volunteers.find(v => v.volunteerId === volId || (v.email && v.email.toLowerCase() === volEmail));
+        if (volRoster) {
+          volRoster.status = 'Approved';
+        }
+
+        vol.token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const { password, ...safeUser } = vol;
+        this.logAudit(vol.email, 'USER_LOGIN', 'User', `Logged in as Field Volunteer Slot ${i} (CMS via Env)`);
+        return safeUser;
+      }
+    }
+
+    // 3. Donor Authentication (Email or Mobile Number + Password)
     let user;
     if (norm.type === 'email') {
       user = this.findUserByEmail(norm.key);

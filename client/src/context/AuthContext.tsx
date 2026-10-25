@@ -13,7 +13,7 @@ interface AuthContextType {
     name: string;
     email: string;
     password: string;
-    role: 'donor' | 'volunteer' | 'admin';
+    role?: 'donor' | 'volunteer' | 'admin';
     phone?: string;
     area?: string;
     skills?: string[];
@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     name: string;
     email: string;
     password: string;
-    role: 'donor' | 'volunteer' | 'admin';
+    role?: 'donor' | 'volunteer' | 'admin';
     phone?: string;
     area?: string;
     skills?: string[];

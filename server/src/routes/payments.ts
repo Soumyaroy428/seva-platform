@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { serverStore } from '../services/store';
-import { sendDonationReceiptEmail } from '../services/email';
+import { sendDonationReceiptEmail, sendDonationPendingNotification } from '../services/email';
 
 const router = Router();
 
@@ -13,12 +13,14 @@ interface CreateSessionRequest {
   campaignId?: string;
   campaignTitle?: string;
   isAnonymous?: boolean;
+  message?: string;
+  paymentMethod?: string;
 }
 
 // 1. POST /api/payments/create-session — Initialize Dynamic UPI Payment Session
 router.post('/create-session', async (req: Request, res: Response) => {
   try {
-    const { amount, donorName, donorEmail, donorPhone, campaignId, campaignTitle, isAnonymous } = req.body as CreateSessionRequest;
+    const { amount, donorName, donorEmail, donorPhone, campaignId, campaignTitle, isAnonymous, message, paymentMethod } = req.body as CreateSessionRequest;
     const parsedAmount = Number(amount);
 
     // Strict ₹20 Minimum Enforcement
@@ -83,19 +85,23 @@ router.post('/create-session', async (req: Request, res: Response) => {
     const resolvedPaymentId = gatewaySession?.paymentId || paymentId;
     const checkoutUrl = gatewaySession?.checkoutUrl || `${checkoutBaseUrl}/checkout/${resolvedPaymentId}`;
 
-    // Register session in store as Pending donation
+    // Register session in store as Pending donation with unique SEVA-DON-2026-XXXXXX ID
     const donation = serverStore.createDonation({
       donorName: isAnonymous ? 'Kind Supporter' : (donorName || 'Generous Donor'),
       donorEmail: donorEmail || '',
       donorPhone: donorPhone || '',
       amount: parsedAmount,
+      currency: 'INR',
       campaignId: campaignId || 'CMP-1',
       campaignTitle: campaignTitle || 'General Hunger Relief & Kitchen Support',
-      paymentMethod: 'UPI',
+      paymentMethod: paymentMethod || 'UPI_DYNAMIC',
       transactionId: resolvedPaymentId,
+      gatewayOrderId: orderId,
+      gatewayPaymentId: resolvedPaymentId,
       isAnonymous: Boolean(isAnonymous),
-      status: 'Pending',
-      auditorNotes: `Session initiated. Order ID: ${orderId}`
+      message: message || '',
+      status: 'PENDING',
+      receiptNote: `Session initiated. Order ID: ${orderId}`
     });
 
     return res.status(201).json({
@@ -108,7 +114,8 @@ router.post('/create-session', async (req: Request, res: Response) => {
       status: 'PENDING',
       checkoutUrl,
       upiIntent: dynamicUpiIntent,
-      donationId: donation.donationId
+      donationId: donation.donationId,
+      donation
     });
   } catch (err: any) {
     console.error('Payment session creation error:', err);
@@ -214,33 +221,41 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
     const event = req.body;
     if (event.event === 'SUCCESS' || event.status === 'SUCCESS') {
-      const paymentId = event.paymentId || event.orderId;
+      const paymentId = event.paymentId;
+      const orderId = event.orderId;
       const utr = event.utr || event.bankReference || `UTR-${Date.now()}`;
+      const payloadAmount = Number(event.amount);
+      const payloadCurrency = (event.currency || 'INR').toUpperCase();
 
       const allDonations = serverStore.getDonations();
-      const existing = allDonations.find(d => d.transactionId === paymentId || d.donationId === paymentId);
+      const existing = allDonations.find(d =>
+        (paymentId && (d.transactionId === paymentId || d.gatewayPaymentId === paymentId || d.donationId === paymentId)) ||
+        (orderId && (d.gatewayOrderId === orderId || d.transactionId === orderId))
+      );
 
       if (existing) {
-        serverStore.updateDonation(existing.id || existing.donationId || '', {
-          status: 'Successful',
-          receiptNote: `Authoritatively settled via Sovereign UPI Gateway. Bank UTR: ${utr}`
-        }, 'YouPI-Gateway');
-
-        // Automated 80G Tax Receipt Email via Resend API
-        if (existing.donorEmail && existing.donorEmail.includes('@')) {
-          sendDonationReceiptEmail({
-            to: existing.donorEmail,
-            donation: {
-              donationId: existing.donationId,
-              donorName: existing.donorName,
-              amount: existing.amount,
-              campaignTitle: existing.campaignTitle || 'General Hunger Relief & Kitchen Support',
-              paymentMethod: 'UPI',
-              transactionId: utr,
-              createdAt: new Date().toISOString()
-            }
-          }).catch(err => console.warn('Resend 80G receipt dispatch warning:', err.message));
+        // Idempotency check: if already SUCCESS, safely acknowledge without duplicate processing
+        if (existing.status === 'SUCCESS' || existing.status === 'Successful' || existing.status === 'Verified') {
+          return res.status(200).json({ received: true, deduplicated: true, donationId: existing.donationId });
         }
+
+        // Amount & currency verification guard
+        if (!isNaN(payloadAmount) && Math.abs(payloadAmount - existing.amount) > 0.01) {
+          console.warn(`⚠️ Webhook amount mismatch for ${existing.donationId}: expected ₹${existing.amount}, got ₹${payloadAmount}`);
+          serverStore.logAudit('Gateway Webhook', 'AMOUNT_MISMATCH_BLOCKED', 'Donation', `Expected ₹${existing.amount}, received ₹${payloadAmount}`);
+          return res.status(400).json({ success: false, error: 'Payment amount mismatch detected.' });
+        }
+
+        if (existing.currency && payloadCurrency !== existing.currency.toUpperCase()) {
+          return res.status(400).json({ success: false, error: 'Currency mismatch.' });
+        }
+
+        serverStore.updateDonation(existing.id || existing.donationId || '', {
+          status: 'SUCCESS',
+          transactionId: utr,
+          verificationSource: 'GATEWAY_WEBHOOK',
+          receiptNote: `Authoritatively settled via Sovereign UPI Gateway. Bank UTR: ${utr}`
+        }, 'Gateway-Webhook');
       }
     }
 
@@ -251,7 +266,116 @@ router.post('/webhook', async (req: Request, res: Response) => {
   }
 });
 
-// 4. POST /api/payments/verify-settlement — Verify Payment & Issue 80G Receipt
+// 4. POST /api/payments/manual-qr-submit — Donor submits Manual QR payment for Admin verification
+router.post('/manual-qr-submit', async (req: Request, res: Response) => {
+  try {
+    const {
+      amount,
+      donorName,
+      donorEmail,
+      donorPhone,
+      campaignId,
+      campaignTitle,
+      utr,
+      proofFile,
+      message,
+      isAnonymous,
+      qrId
+    } = req.body;
+
+    const parsedAmount = Number(amount);
+    if (isNaN(parsedAmount) || parsedAmount < 20) {
+      return res.status(400).json({
+        success: false,
+        error: 'Minimum donation amount is ₹20 INR. Smaller contributions cannot be processed.'
+      });
+    }
+
+    if (!donorName?.trim() || !donorEmail?.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Full legal name and email address are required for donation verification.'
+      });
+    }
+
+    const cleanUtr = String(utr || '').trim();
+    if (!cleanUtr || cleanUtr.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'A valid 12-digit UPI reference / UTR number is required for manual bank verification.'
+      });
+    }
+
+    // Duplicate transaction reference / UTR check
+    const allDonations = serverStore.getDonations();
+    const duplicate = allDonations.find(d =>
+      d.transactionId &&
+      d.transactionId.toLowerCase() === cleanUtr.toLowerCase() &&
+      (d.status === 'SUCCESS' || d.status === 'Successful' || d.status === 'PENDING_VERIFICATION')
+    );
+
+    if (duplicate) {
+      return res.status(409).json({
+        success: false,
+        error: `A donation with this transaction reference (${cleanUtr}) has already been recorded under Donation ID ${duplicate.donationId}. Duplicate submissions are strictly prevented.`
+      });
+    }
+
+    const year = new Date().getFullYear();
+    const randomNum = Math.floor(100000 + Math.random() * 900000);
+    const donationId = `SEVA-DON-${year}-${randomNum}`;
+
+    const newDonation = serverStore.createDonation({
+      donationId,
+      donorName: isAnonymous ? 'Kind Supporter' : donorName.trim(),
+      donorEmail: donorEmail.trim(),
+      donorPhone: donorPhone?.trim() || '',
+      amount: parsedAmount,
+      currency: 'INR',
+      campaignId: campaignId || 'CMP-1',
+      campaignTitle: campaignTitle || 'General Hunger Relief & Kitchen Support',
+      paymentMethod: 'UPI_MANUAL_QR',
+      status: 'PENDING_VERIFICATION',
+      transactionId: cleanUtr,
+      proofFile: proofFile || '',
+      message: message?.trim() || '',
+      isAnonymous: Boolean(isAnonymous),
+      verificationSource: 'ADMIN_MANUAL',
+      receiptNote: `Awaiting Admin verification against bank statement. UPI UTR: ${cleanUtr} (QR: ${qrId || 'Approved QR'})`
+    });
+
+    serverStore.logAudit(
+      donorEmail.trim(),
+      'MANUAL_VERIFICATION_REQUESTED',
+      'Donation',
+      `Manual QR contribution of ₹${parsedAmount} submitted with UTR ${cleanUtr} (ID: ${donationId}). Awaiting Admin verification.`
+    );
+
+    // Dispatch pending verification notifications (Email & SMS)
+    sendDonationPendingNotification({
+      toEmail: donorEmail.trim(),
+      toPhone: donorPhone?.trim(),
+      donation: {
+        donationId: newDonation.donationId,
+        donorName: newDonation.donorName,
+        amount: newDonation.amount,
+        campaignTitle: newDonation.campaignTitle || 'General Hunger Relief & Kitchen Support'
+      }
+    }).catch(err => console.warn('Pending notification dispatch error:', err));
+
+    return res.status(201).json({
+      success: true,
+      message: 'Payment submission received. Awaiting Admin verification against bank credit.',
+      donationId: newDonation.donationId,
+      status: 'PENDING_VERIFICATION',
+      donation: newDonation
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. POST /api/payments/verify-settlement — Verify Payment & Issue 80G Receipt
 router.post('/verify-settlement', async (req: Request, res: Response) => {
   try {
     const { paymentId, utr, donorName, donorEmail, donorPhone, amount, campaignId, campaignTitle, isAnonymous } = req.body;

@@ -129,10 +129,10 @@ export default function BottomAdminPortal({ onOpenDonate, onOpenVolunteer }: Bot
               ) : (
                 <>
                   <Link
-                    href="/login?redirect=/volunteer&role=volunteer"
+                    href="/cms?redirect=/volunteer&role=volunteer"
                     className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/30"
                   >
-                    <span>Volunteer Login</span>
+                    <span>Field Volunteer Login (CMS)</span>
                     <ArrowRight className="w-4 h-4" />
                   </Link>
 
@@ -192,11 +192,11 @@ export default function BottomAdminPortal({ onOpenDonate, onOpenVolunteer }: Bot
 
             <div className="pt-4 border-t border-slate-800/80 flex items-center gap-3">
               <Link
-                href={isAdmin ? '/admin' : '/login?redirect=/admin&role=admin'}
+                href={isAdmin ? '/admin' : '/cms?redirect=/admin&role=admin'}
                 className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-purple-900/30"
               >
                 <Lock className="w-3.5 h-3.5" />
-                <span>{isAdmin ? 'Open Admin Console' : 'Administrator Login'}</span>
+                <span>{isAdmin ? 'Open Admin Console' : 'Administrator CMS Login'}</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>

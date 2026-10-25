@@ -124,9 +124,16 @@ export default function DonorDashboard() {
     );
   }
 
-  const totalDonated = donations.reduce((acc, curr) => acc + curr.amount, 0);
+  // Strict verification guard: only SUCCESS / Verified donations count in platform & donor totals
+  const verifiedDonations = donations.filter(
+    d => d.status === 'SUCCESS' || d.status === 'Successful' || d.status === 'Verified'
+  );
+  const pendingDonations = donations.filter(d => d.status === 'PENDING_VERIFICATION');
+  const rejectedDonations = donations.filter(d => d.status === 'REJECTED' || d.status === 'FAILED');
+
+  const totalDonated = verifiedDonations.reduce((acc, curr) => acc + curr.amount, 0);
   const totalMealsSupported = Math.floor(totalDonated / 25);
-  const campaignsSupportedCount = new Set(donations.map(d => d.campaignTitle)).size;
+  const campaignsSupportedCount = new Set(verifiedDonations.map(d => d.campaignTitle)).size;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -229,6 +236,23 @@ export default function DonorDashboard() {
           </button>
         </div>
 
+        {/* Pending Verification Notice Banner */}
+        {pendingDonations.length > 0 && (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3 shadow-sm animate-in fade-in">
+            <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shrink-0 mt-0.5">
+              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+            </div>
+            <div className="text-xs text-amber-900 space-y-1">
+              <h4 className="font-black text-sm text-amber-950">
+                {pendingDonations.length} Donation Submission{pendingDonations.length > 1 ? 's' : ''} Awaiting Bank Verification
+              </h4>
+              <p className="text-amber-800 leading-relaxed">
+                Thank you for your generous contribution. Your manual UPI payment is currently undergoing verification against our official bank statement by the Admin team. As soon as the transaction reference is confirmed, your 80G Tax Exemption Receipt will be instantly available for download.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
@@ -297,14 +321,20 @@ export default function DonorDashboard() {
                         <p className="text-[11px] text-slate-500 font-mono">{don.donationId} • {don.createdAt ? don.createdAt.toString().split('T')[0] : 'Recent'}</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="font-black text-emerald-700">{formatINR(don.amount)}</span>
-                        <button
-                          onClick={() => setSelectedReceipt(don)}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] flex items-center gap-1"
-                        >
-                          <Download className="w-3 h-3" />
-                          <span>80G Receipt</span>
-                        </button>
+                        <span className="font-black text-slate-900">{formatINR(don.amount)}</span>
+                        {don.status === 'SUCCESS' || don.status === 'Successful' || don.status === 'Verified' ? (
+                          <button
+                            onClick={() => setSelectedReceipt(don)}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] flex items-center gap-1"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>80G Receipt</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                            {don.status}
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -352,37 +382,64 @@ export default function DonorDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {donations.map(don => (
-                      <tr key={don.id || don.donationId} className="hover:bg-slate-50">
-                        <td className="py-3 px-4 font-mono font-bold text-slate-800">{don.donationId}</td>
-                        <td className="py-3 px-4 text-slate-700 font-semibold">{don.campaignTitle || 'General Hunger Relief'}</td>
-                        <td className="py-3 px-4 font-black text-emerald-700 text-sm">{formatINR(don.amount)}</td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            don.paymentMethod === 'Cash' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {don.paymentMethod}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            {don.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-500">
-                          {don.createdAt ? don.createdAt.toString().split('T')[0] : 'Recent'}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            onClick={() => setSelectedReceipt(don)}
-                            className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg font-bold text-xs flex items-center gap-1 ml-auto transition-colors"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>80G Receipt</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {donations.map(don => {
+                      const isSuccess = don.status === 'SUCCESS' || don.status === 'Successful' || don.status === 'Verified';
+                      const isPendingVerif = don.status === 'PENDING_VERIFICATION';
+                      const isRejected = don.status === 'REJECTED' || don.status === 'FAILED';
+
+                      return (
+                        <tr key={don.id || don.donationId} className="hover:bg-slate-50">
+                          <td className="py-3 px-4 font-mono font-bold text-slate-800">{don.donationId}</td>
+                          <td className="py-3 px-4 text-slate-700 font-semibold">{don.campaignTitle || 'General Hunger Relief'}</td>
+                          <td className="py-3 px-4 font-black text-slate-900 text-sm">{formatINR(don.amount)}</td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                              {don.paymentMethod || 'UPI'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                isSuccess
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : isPendingVerif
+                                  ? 'bg-amber-100 text-amber-900'
+                                  : isRejected
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              {don.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-slate-500">
+                            {don.createdAt ? don.createdAt.toString().split('T')[0] : 'Recent'}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {isSuccess ? (
+                              <button
+                                onClick={() => setSelectedReceipt(don)}
+                                className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg font-bold text-xs flex items-center gap-1 ml-auto transition-colors"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>80G Receipt</span>
+                              </button>
+                            ) : isPendingVerif ? (
+                              <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-bold inline-block">
+                                Awaiting Bank Match
+                              </span>
+                            ) : (
+                              <span
+                                className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold inline-block"
+                                title={don.rejectionReason || 'Verification could not be confirmed'}
+                              >
+                                Unverified
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

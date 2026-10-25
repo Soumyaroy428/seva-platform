@@ -23,7 +23,14 @@ router.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    const assignedRole: 'admin' | 'volunteer' | 'donor' = role === 'admin' ? 'admin' : (role === 'volunteer' ? 'volunteer' : 'donor');
+    if (role === 'volunteer' || role === 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Public volunteer and administrator registration is disabled. Administrator and Field Volunteer credentials are managed exclusively via CMS and Environment Configuration.'
+      });
+    }
+
+    const assignedRole: 'donor' = 'donor';
 
     const user = serverStore.createUser({
       name,
@@ -36,16 +43,9 @@ router.post('/register', async (req: Request, res: Response) => {
       availability
     });
 
-    let message = 'Donor account registered successfully. You can now login and make donations.';
-    if (assignedRole === 'volunteer') {
-      message = 'Volunteer account registered successfully. Note: Access to operational dashboard requires Admin approval.';
-    } else if (assignedRole === 'admin') {
-      message = 'Administrator account registered successfully (Slot active). You can now access the Admin Console.';
-    }
-
     res.status(201).json({
       success: true,
-      message,
+      message: 'Donor account registered successfully. You can now login and make donations.',
       user
     });
   } catch (err: any) {
@@ -56,19 +56,20 @@ router.post('/register', async (req: Request, res: Response) => {
 // User login
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const identifier = (req.body.email || req.body.identifier || req.body.phone || '').trim();
+    const { password } = req.body;
 
-    if (!email || !password) {
+    if (!identifier || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Email and password are required.'
+        error: 'Email or mobile number, and password are required.'
       });
     }
 
     const { initServer } = await import('../index.js');
     await initServer();
 
-    const user = serverStore.authenticateUser(email.trim().toLowerCase(), password);
+    const user = serverStore.authenticateUser(identifier, password);
 
     res.json({
       success: true,

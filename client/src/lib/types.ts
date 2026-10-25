@@ -97,6 +97,24 @@ export interface ICampaign {
   category: 'Food Relief' | 'Disaster' | 'Education' | 'Community Kitchen' | 'Medical Supplies';
 }
 
+export type PaymentStatus =
+  | 'PENDING'
+  | 'PENDING_VERIFICATION'
+  | 'PROCESSING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'REJECTED'
+  | 'REFUND_PENDING'
+  | 'REFUNDED'
+  | 'Pending'
+  | 'Processing'
+  | 'Successful'
+  | 'Failed'
+  | 'Verification Required'
+  | 'Rejected'
+  | 'Refunded'
+  | 'Verified';
+
 export interface IDonation {
   _id?: string;
   id?: string;
@@ -105,18 +123,28 @@ export interface IDonation {
   donorEmail: string;
   donorPhone?: string;
   amount: number; // >= 20
+  currency?: string;
   campaignId?: string;
   campaignTitle?: string;
-  paymentMethod: 'UPI' | 'QR' | 'Card' | 'Netbanking' | 'Cash' | 'Cheque';
-  status: 'Pending' | 'Processing' | 'Successful' | 'Failed' | 'Verification Required' | 'Rejected' | 'Refunded' | 'Verified';
+  paymentMethod: 'UPI' | 'QR' | 'Card' | 'Netbanking' | 'Cash' | 'Cheque' | 'UPI_DYNAMIC' | 'UPI_MANUAL_QR' | string;
+  status: PaymentStatus;
   transactionId?: string;
+  gatewayOrderId?: string;
+  gatewayPaymentId?: string;
   paymentProofUrl?: string;
+  proofFile?: string;
   isAnonymous?: boolean;
+  message?: string;
+  verificationSource?: string;
+  rejectionReason?: string;
+  receiptId?: string;
+  notificationsSent?: { email?: boolean; sms?: boolean };
   recurringFrequency?: 'None' | 'Weekly' | 'Monthly' | 'Quarterly';
   collectedBy?: string;
   receiptNote?: string;
   verifiedBy?: string;
   verifiedAt?: string;
+  auditHistory?: Array<{ action: string; timestamp: string; actor: string; note: string }>;
   createdAt?: string | Date;
 }
 

@@ -6,37 +6,33 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import {
   Heart,
-  ShieldCheck,
-  UserCheck,
-  Sparkles,
   Lock,
   Mail,
   User,
   Phone,
-  MapPin,
   ArrowRight,
   ArrowLeft,
   AlertCircle,
   CheckCircle2,
-  Clock,
   KeyRound,
   RotateCcw,
   Smartphone,
-  Check
+  Check,
+  ShieldCheck
 } from 'lucide-react';
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectUrl = searchParams.get('redirect');
-  const initialRoleParam = searchParams.get('role');
 
   const { sendOtp, verifyOtp, login, register: passwordRegister } = useAuth();
 
-  // Mode and Authentication Method states
+  // Mode: Sign In vs Create Donor Account
   const [mode, setMode] = useState<'signin' | 'register'>('signin');
-  const [authMethod, setAuthMethod] = useState<'otp' | 'password'>('password');
-  const [identifierType, setIdentifierType] = useState<'phone' | 'email'>('phone');
+  // Authentication Method for Donors: Password (default) vs OTP
+  const [authMethod, setAuthMethod] = useState<'password' | 'otp'>('password');
+  const [identifierType, setIdentifierType] = useState<'email' | 'phone'>('email');
 
   // OTP Flow States
   const [step, setStep] = useState<'input' | 'otp'>('input');
@@ -45,35 +41,19 @@ function LoginContent() {
   const [countdown, setCountdown] = useState<number>(0);
 
   // Form Fields
+  const [identifierInput, setIdentifierInput] = useState(''); // Email or Mobile Number
   const [phoneInput, setPhoneInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'donor' | 'volunteer' | 'admin'>('donor');
-  const [area, setArea] = useState('Central District & Urban Kitchen');
-  const [availability, setAvailability] = useState('Weekends');
-  const [selectedSkills, setSelectedSkills] = useState<string[]>(['Logistics & Packaging']);
 
-  // Status & Quotas
+  // Status
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [quotas, setQuotas] = useState<any>(null);
 
   // OTP input refs
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-
-  // Fetch live quotas on mount
-  useEffect(() => {
-    fetch('/api/auth/quotas')
-      .then(r => r.json())
-      .then(d => { if (d.success && d.quotas) setQuotas(d.quotas); })
-      .catch(() => {});
-
-    if (initialRoleParam && ['donor', 'volunteer', 'admin'].includes(initialRoleParam)) {
-      setRole(initialRoleParam as any);
-    }
-  }, [initialRoleParam]);
 
   // Resend Countdown Timer
   useEffect(() => {
@@ -82,53 +62,95 @@ function LoginContent() {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  const availableSkillsList = [
-    'Logistics & Packaging',
-    'Driving & Vehicle Transit',
-    'Food Inspection & Safety',
-    'Emergency Relief Dispatch',
-    'Crowd Management',
-    'First Aid & Health'
-  ];
-
-  const toggleSkill = (skill: string) => {
-    if (selectedSkills.includes(skill)) {
-      setSelectedSkills(selectedSkills.filter(s => s !== skill));
-    } else {
-      setSelectedSkills([...selectedSkills, skill]);
-    }
-  };
-
-  const getEffectiveIdentifier = () => {
-    if (identifierType === 'phone') {
-      const cleanPhone = phoneInput.trim();
-      return cleanPhone.startsWith('+') ? cleanPhone : `+91 ${cleanPhone}`;
-    }
-    return emailInput.trim().toLowerCase();
-  };
-
-  const handleRedirect = (userRole: string) => {
+  const handleRedirect = () => {
     if (redirectUrl) {
       router.push(redirectUrl);
       return;
     }
-    if (userRole === 'admin') {
-      router.push('/admin');
-    } else if (userRole === 'volunteer') {
-      router.push('/volunteer');
+    router.push('/donor');
+  };
+
+  // 1. Password Sign In / Registration for Donors
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
+    setLoading(true);
+
+    if (mode === 'signin') {
+      const cleanIdentifier = identifierInput.trim();
+      if (!cleanIdentifier) {
+        setError('Please enter your registered email address or mobile number.');
+        setLoading(false);
+        return;
+      }
+      if (!password) {
+        setError('Please enter your password.');
+        setLoading(false);
+        return;
+      }
+
+      const res = await login(cleanIdentifier, password);
+      setLoading(false);
+
+      if (res.success && res.user) {
+        setSuccessMessage('Welcome back! Redirecting to your Donor Impact Hub...');
+        setTimeout(() => handleRedirect(), 500);
+      } else {
+        setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Invalid email, mobile number, or password.');
+      }
     } else {
-      router.push('/donor');
+      // Create Donor Account
+      if (!name.trim()) {
+        setError('Full legal or preferred name is required for 80G tax receipts.');
+        setLoading(false);
+        return;
+      }
+      if (!emailInput.trim() || !emailInput.includes('@')) {
+        setError('A valid email address is required for 80G tax receipt delivery.');
+        setLoading(false);
+        return;
+      }
+      if (!password || password.length < 6) {
+        setError('Password must be at least 6 characters.');
+        setLoading(false);
+        return;
+      }
+
+      const res = await passwordRegister({
+        name: name.trim(),
+        email: emailInput.trim().toLowerCase(),
+        password,
+        role: 'donor',
+        phone: phoneInput.trim()
+      });
+      setLoading(false);
+
+      if (res.success && res.user) {
+        setSuccessMessage('Donor account created successfully! Accessing your portal...');
+        setTimeout(() => handleRedirect(), 600);
+      } else {
+        setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Failed to create donor account.');
+      }
     }
   };
 
-  // STEP 1: Send OTP
+  // 2. OTP Sign In Flow (Mobile / Email OTP for donors who prefer passwordless)
+  const getEffectiveOtpIdentifier = () => {
+    if (identifierType === 'phone') {
+      const clean = phoneInput.trim();
+      return clean.startsWith('+') ? clean : `+91 ${clean}`;
+    }
+    return emailInput.trim().toLowerCase();
+  };
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
 
-    const id = getEffectiveIdentifier();
-    if (!id || (identifierType === 'phone' && phoneInput.replace(/\D/g, '').length < 10)) {
+    const id = getEffectiveOtpIdentifier();
+    if (identifierType === 'phone' && phoneInput.replace(/\D/g, '').length < 10) {
       setError('Please enter a valid 10-digit mobile number.');
       return;
     }
@@ -140,12 +162,9 @@ function LoginContent() {
     setLoading(true);
     const registerData = mode === 'register' ? {
       name,
-      role,
+      role: 'donor' as const,
       phone: identifierType === 'phone' ? id : phoneInput,
-      email: identifierType === 'email' ? id : emailInput,
-      area: role === 'volunteer' ? area : undefined,
-      skills: role === 'volunteer' ? selectedSkills : undefined,
-      availability: role === 'volunteer' ? availability : undefined
+      email: identifierType === 'email' ? id : emailInput
     } : undefined;
 
     const res = await sendOtp(id, mode === 'register' ? 'register' : 'login', registerData);
@@ -164,22 +183,17 @@ function LoginContent() {
     }
   };
 
-  // Auto-Fill OTP Helper for evaluator convenience
   const handleAutoFillOtp = (code: string) => {
     const chars = code.split('').slice(0, 6);
     setOtpDigits(chars);
-    // Focus last input
     inputRefs.current[5]?.focus();
   };
 
-  // Handle individual digit input
   const handleOtpDigitChange = (index: number, value: string) => {
     const char = value.slice(-1);
     const newDigits = [...otpDigits];
     newDigits[index] = char;
     setOtpDigits(newDigits);
-
-    // Auto-advance to next input
     if (char && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -206,7 +220,6 @@ function LoginContent() {
     }
   };
 
-  // STEP 2: Verify OTP
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -219,65 +232,22 @@ function LoginContent() {
     }
 
     setLoading(true);
-    const id = getEffectiveIdentifier();
+    const id = getEffectiveOtpIdentifier();
     const registerData = mode === 'register' ? {
       name,
-      role,
+      role: 'donor' as const,
       phone: identifierType === 'phone' ? id : phoneInput,
-      email: identifierType === 'email' ? id : emailInput,
-      area: role === 'volunteer' ? area : undefined,
-      skills: role === 'volunteer' ? selectedSkills : undefined,
-      availability: role === 'volunteer' ? availability : undefined
+      email: identifierType === 'email' ? id : emailInput
     } : undefined;
 
     const res = await verifyOtp(id, fullCode, registerData);
     setLoading(false);
 
     if (res.success && res.user) {
-      const userRole = res.user.role;
-      setSuccessMessage('Verification successful! Accessing your portal...');
-      setTimeout(() => handleRedirect(userRole), 600);
+      setSuccessMessage('Verification successful! Accessing your Donor Portal...');
+      setTimeout(() => handleRedirect(), 500);
     } else {
       setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Verification code is invalid or has expired.');
-    }
-  };
-
-  // Alternative Password Sign In (if user toggles to password mode)
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccessMessage('');
-    setLoading(true);
-
-    if (mode === 'signin') {
-      const res = await login(emailInput, password);
-      setLoading(false);
-      if (res.success && res.user) {
-        const userRole = res.user.role;
-        setSuccessMessage('Login successful! Redirecting...');
-        setTimeout(() => handleRedirect(userRole), 500);
-      } else {
-        setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Failed to login');
-      }
-    } else {
-      const res = await passwordRegister({
-        name,
-        email: emailInput,
-        password,
-        role,
-        phone: phoneInput,
-        area: role === 'volunteer' ? area : undefined,
-        skills: role === 'volunteer' ? selectedSkills : undefined,
-        availability: role === 'volunteer' ? availability : undefined
-      });
-      setLoading(false);
-      if (res.success && res.user) {
-        const userRole = res.user.role;
-        setSuccessMessage(res.message || 'Account registered successfully!');
-        setTimeout(() => handleRedirect(userRole), 1000);
-      } else {
-        setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Failed to register');
-      }
     }
   };
 
@@ -292,18 +262,24 @@ function LoginContent() {
           <span className="text-2xl font-black tracking-tight text-slate-900">SEVA</span>
           <span className="text-xs bg-orange-100 text-orange-800 font-semibold px-2 py-0.5 rounded">सेवा</span>
         </Link>
+
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold mb-2">
+          <Heart className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
+          <span>Donor Community Portal</span>
+        </div>
+
         <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-          {mode === 'signin' ? 'Sign In' : 'Create Account'}
+          {mode === 'signin' ? 'Donor Sign In' : 'Create Donor Account'}
         </h2>
-        <p className="mt-2 text-xs sm:text-sm text-slate-600">
-          Instant passwordless access for <span className="font-semibold text-orange-600">Donors</span>, <span className="font-semibold text-emerald-600">Volunteers</span> & <span className="font-semibold text-slate-800">Admins</span>
+        <p className="mt-1.5 text-xs sm:text-sm text-slate-600 max-w-sm mx-auto">
+          Access your personal donation history, download official 80G tax receipts, and track your hunger relief impact.
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg">
-        <div className="bg-white py-8 px-6 shadow-xl rounded-3xl sm:px-10 border border-slate-200/80">
-          {/* Sign In vs Register Switch */}
-          <div className="flex border-b border-slate-200 mb-6">
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-6 shadow-xl rounded-3xl sm:px-10 border border-slate-200/80 space-y-6">
+          {/* Mode Switch: Sign In vs Register */}
+          <div className="flex border-b border-slate-200">
             <button
               type="button"
               onClick={() => {
@@ -313,32 +289,12 @@ function LoginContent() {
                 setSuccessMessage('');
               }}
               className={`flex-1 pb-3 text-sm font-bold text-center border-b-2 transition-all ${
-                mode === 'signin' && authMethod === 'otp'
+                mode === 'signin'
                   ? 'border-orange-500 text-orange-600'
                   : 'border-transparent text-slate-400 hover:text-slate-600'
               }`}
             >
-              Sign In (OTP)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signin');
-                setAuthMethod('password');
-                const defaultAdminEmail = process.env.NEXT_PUBLIC_CMS_ADMIN_EMAIL || 'admin@seva.org';
-                const defaultAdminPass = process.env.NEXT_PUBLIC_CMS_ADMIN_PASSWORD || 'Admin@123456';
-                setEmailInput(defaultAdminEmail);
-                setPassword(defaultAdminPass);
-                setError('');
-                setSuccessMessage('CMS Administrator credentials loaded from .env.');
-              }}
-              className={`flex-1 pb-3 text-xs sm:text-sm font-bold text-center border-b-2 transition-all ${
-                mode === 'signin' && authMethod === 'otp' && authMethod === 'password'
-                  ? 'border-indigo-600 text-indigo-700'
-                  : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              CMS Admin Login
+              Sign In
             </button>
             <button
               type="button"
@@ -354,35 +310,164 @@ function LoginContent() {
                   : 'border-transparent text-slate-400 hover:text-slate-600'
               }`}
             >
-              Register Candidate
+              New Supporter? Register
             </button>
           </div>
 
           {/* Feedback Messages */}
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-700 text-xs font-semibold animate-in fade-in">
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-700 text-xs font-semibold animate-in fade-in">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{typeof error === 'string' ? error : (error as any)?.message || JSON.stringify(error)}</span>
             </div>
           )}
 
           {successMessage && (
-            <div className="mb-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-2.5 text-emerald-700 text-xs font-semibold animate-in fade-in">
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-2.5 text-emerald-700 text-xs font-semibold animate-in fade-in">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{typeof successMessage === 'string' ? successMessage : (successMessage as any)?.message || JSON.stringify(successMessage)}</span>
             </div>
           )}
 
-          {/* ============================================================ */}
-          {/* OTP AUTHENTICATION FLOW */}
-          {/* ============================================================ */}
-          {authMethod === 'otp' ? (
+          {/* FLOW 1: PASSWORD LOGIN (Default and Primary for Donors) */}
+          {authMethod === 'password' ? (
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              {mode === 'register' ? (
+                /* Registration Fields */
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Full Legal Name</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. Priya Sharma"
+                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">Printed on your official 80G Tax Exemption receipts.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="email"
+                        required
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="priya@example.com"
+                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Mobile Number (Optional for SMS)</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-mono text-xs font-bold">
+                        +91
+                      </div>
+                      <input
+                        type="tel"
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
+                        placeholder="98765 43210"
+                        className="w-full pl-12 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Create Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Minimum 6 characters"
+                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-md shadow-orange-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 mt-2"
+                  >
+                    <Heart className="w-4 h-4 fill-white" />
+                    <span>{loading ? 'Creating Account...' : 'Complete Donor Registration'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                /* Donor Sign In Fields: Email or Mobile + Password */
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Email or Mobile Number</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={identifierInput}
+                        onChange={(e) => setIdentifierInput(e.target.value)}
+                        placeholder="Enter email or 10-digit mobile number"
+                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-md shadow-orange-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 mt-2"
+                  >
+                    <Heart className="w-4 h-4 fill-white" />
+                    <span>{loading ? 'Authenticating...' : 'Sign In to Donor Portal'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </form>
+          ) : (
+            /* FLOW 2: OTP LOGIN (For donors who prefer OTP code) */
             step === 'input' ? (
-              /* STEP 1: INPUT IDENTIFIER */
               <form onSubmit={handleSendOtp} className="space-y-4">
-                {/* Method selector: Mobile vs Email */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Verification Channel</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Receive Verification Code Via</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -411,103 +496,9 @@ function LoginContent() {
                   </div>
                 </div>
 
-                {/* Candidate Role Selector (in register mode) */}
-                {mode === 'register' && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">Candidate Role</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setRole('donor')}
-                          className={`py-2 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
-                            role === 'donor'
-                              ? 'border-orange-500 bg-orange-50/80 text-orange-800 ring-2 ring-orange-400/20'
-                              : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                          }`}
-                        >
-                          <Heart className="w-4 h-4 text-rose-500" />
-                          <span>Donor</span>
-                          <span className="text-[9px] text-slate-400 font-normal">Open</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setRole('volunteer')}
-                          className={`py-2 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
-                            role === 'volunteer'
-                              ? 'border-emerald-500 bg-emerald-50/80 text-emerald-800 ring-2 ring-emerald-400/20'
-                              : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                          }`}
-                        >
-                          <UserCheck className="w-4 h-4 text-emerald-600" />
-                          <span>Volunteer</span>
-                          <span className={`text-[9px] font-mono ${quotas?.volunteers.isFull ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                            {quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '0/4'}
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setRole('admin')}
-                          className={`py-2 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
-                            role === 'admin'
-                              ? 'border-purple-500 bg-purple-50/80 text-purple-800 ring-2 ring-purple-400/20'
-                              : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                          }`}
-                        >
-                          <ShieldCheck className="w-4 h-4 text-purple-600" />
-                          <span>Admin</span>
-                          <span className={`text-[9px] font-mono ${quotas?.admins.isFull ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                            {quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '0/1'}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {role === 'volunteer' && (
-                      <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
-                        <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                        <span>
-                          <strong>Volunteer Limit ({quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '0/4'}):</strong> Strict maximum 4 volunteers permitted. Approvals are vetted by Administrator.
-                        </span>
-                      </div>
-                    )}
-
-                    {role === 'admin' && (
-                      <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-xs flex items-start gap-2">
-                        <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                        <span>
-                          <strong>Admin Limit ({quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '0/1'}):</strong> Strict maximum 1 platform administrator permitted. Admin gets master CRUD access over all modules.
-                        </span>
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Full Candidate Name</label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                          <User className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="text"
-                          required
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="Your legal or preferred name"
-                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all outline-none"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* Primary Input: Mobile or Email */}
                 {identifierType === 'phone' ? (
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      {mode === 'register' ? 'Mobile Number for OTP' : 'Registered Mobile Number'}
-                    </label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Registered Mobile Number</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-mono text-xs font-bold">
                         +91
@@ -518,16 +509,13 @@ function LoginContent() {
                         value={phoneInput}
                         onChange={(e) => setPhoneInput(e.target.value)}
                         placeholder="98765 43210"
-                        className="w-full pl-12 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all outline-none"
+                        className="w-full pl-12 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none"
                       />
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1">A 6-digit verification code will be dispatched to this number.</p>
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      {mode === 'register' ? 'Email Address for OTP' : 'Registered Email Address'}
-                    </label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Registered Email Address</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                         <Mail className="w-4 h-4" />
@@ -537,48 +525,11 @@ function LoginContent() {
                         required
                         value={emailInput}
                         onChange={(e) => setEmailInput(e.target.value)}
-                        placeholder="e.g. yourname@example.com"
-                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all outline-none"
+                        placeholder="donor@example.com"
+                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none"
                       />
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1">A 6-digit verification code will be dispatched to this email.</p>
                   </div>
-                )}
-
-                {/* Volunteer extra fields in register mode */}
-                {mode === 'register' && role === 'volunteer' && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Operational Area</label>
-                      <input
-                        type="text"
-                        value={area}
-                        onChange={(e) => setArea(e.target.value)}
-                        placeholder="District or zone"
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Skills</label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {availableSkillsList.map(sk => (
-                          <button
-                            key={sk}
-                            type="button"
-                            onClick={() => toggleSkill(sk)}
-                            className={`text-[10px] px-2 py-1 rounded-lg border font-semibold transition-all ${
-                              selectedSkills.includes(sk)
-                                ? 'bg-emerald-600 text-white border-emerald-600'
-                                : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}
-                          >
-                            {sk}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </>
                 )}
 
                 <button
@@ -587,12 +538,11 @@ function LoginContent() {
                   className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-md shadow-orange-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 mt-2"
                 >
                   <KeyRound className="w-4 h-4" />
-                  <span>{loading ? 'Dispatching OTP...' : 'Send Verification Code (OTP)'}</span>
+                  <span>{loading ? 'Sending OTP...' : 'Send 6-Digit OTP Code'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </form>
             ) : (
-              /* STEP 2: ENTER 6-DIGIT OTP */
               <form onSubmit={handleVerifyOtp} className="space-y-5 animate-in fade-in">
                 <div className="text-center space-y-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-orange-600 bg-orange-100/70 px-3 py-0.5 rounded-full">
@@ -602,51 +552,42 @@ function LoginContent() {
                     Enter the 6-digit verification code sent to:
                   </p>
                   <p className="font-mono font-bold text-slate-900 text-sm">
-                    {getEffectiveIdentifier()}
+                    {getEffectiveOtpIdentifier()}
                   </p>
                 </div>
 
-                {/* Simulated SMS / Dispatch Notification for Evaluator Convenience */}
                 {activeOtpPreview && (
-                  <div className="p-3.5 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-orange-500 text-white flex items-center justify-center font-black shrink-0">
-                        OTP
-                      </div>
-                      <div>
-                        <span className="font-bold text-slate-900 block">Security Verification Code:</span>
-                        <span className="font-mono text-base font-black text-orange-600 tracking-wider">
-                          {activeOtpPreview}
-                        </span>
-                        <span className="text-[10px] text-slate-500 ml-1.5">(Valid for 10 mins)</span>
-                      </div>
+                  <div className="p-3 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-bold block">Verification Code:</span>
+                      <span className="font-mono text-base font-black text-orange-600 tracking-wider">
+                        {activeOtpPreview}
+                      </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleAutoFillOtp(activeOtpPreview)}
-                      className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1 shadow-sm transition-all"
+                      className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg text-xs flex items-center gap-1"
                     >
                       <Check className="w-3.5 h-3.5" />
-                      <span>Auto-Fill Code</span>
+                      <span>Auto-Fill</span>
                     </button>
                   </div>
                 )}
 
-                {/* 6 Digit Input Boxes */}
-                <div className="flex justify-center items-center gap-2 sm:gap-3 py-2">
+                <div className="flex justify-center items-center gap-2 py-2">
                   {otpDigits.map((digit, idx) => (
                     <input
                       key={idx}
                       ref={(el) => { inputRefs.current[idx] = el; }}
                       type="text"
                       inputMode="numeric"
-                      pattern="[0-9]*"
                       maxLength={1}
                       value={digit}
                       onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                       onPaste={handleOtpPaste}
-                      className="w-11 h-12 sm:w-12 sm:h-14 text-center text-xl font-mono font-black text-slate-900 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-400/30 outline-none transition-all"
+                      className="w-11 h-12 text-center text-xl font-mono font-black text-slate-900 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-orange-500 focus:bg-white outline-none"
                     />
                   ))}
                 </div>
@@ -657,7 +598,7 @@ function LoginContent() {
                   className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-md shadow-orange-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  <span>{loading ? 'Verifying Code...' : 'Verify OTP & Enter Portal'}</span>
+                  <span>{loading ? 'Verifying...' : 'Verify & Enter Donor Hub'}</span>
                 </button>
 
                 <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
@@ -670,7 +611,7 @@ function LoginContent() {
                     className="text-slate-500 hover:text-slate-800 font-semibold flex items-center gap-1"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
-                    <span>Change {identifierType === 'phone' ? 'Number' : 'Email'}</span>
+                    <span>Change Recipient</span>
                   </button>
 
                   <button
@@ -682,224 +623,16 @@ function LoginContent() {
                     }`}
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>{countdown > 0 ? `Resend Code in ${countdown}s` : 'Resend Code'}</span>
+                    <span>{countdown > 0 ? `Resend in ${countdown}s` : 'Resend Code'}</span>
                   </button>
                 </div>
               </form>
             )
-          ) : (
-            /* PASSWORD FALLBACK FLOW */
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              {mode === 'register' && (
-                <>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Candidate Role</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setRole('donor')}
-                        className={`py-2 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
-                          role === 'donor'
-                            ? 'border-orange-500 bg-orange-50/80 text-orange-800 ring-2 ring-orange-400/20'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        <Heart className="w-4 h-4 text-rose-500" />
-                        <span>Donor</span>
-                        <span className="text-[9px] text-slate-400 font-normal">Open</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setRole('volunteer')}
-                        className={`py-2 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
-                          role === 'volunteer'
-                            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-800 ring-2 ring-emerald-400/20'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        <UserCheck className="w-4 h-4 text-emerald-600" />
-                        <span>Volunteer</span>
-                        <span className={`text-[9px] font-mono ${quotas?.volunteers.isFull ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                          {quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '0/4'}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setRole('admin')}
-                        className={`py-2 px-2 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
-                          role === 'admin'
-                            ? 'border-purple-500 bg-purple-50/80 text-purple-800 ring-2 ring-purple-400/20'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        <ShieldCheck className="w-4 h-4 text-purple-600" />
-                        <span>Admin</span>
-                        <span className={`text-[9px] font-mono ${quotas?.admins.isFull ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                          {quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '0/1'}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {role === 'volunteer' && (
-                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
-                      <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Volunteer Limit ({quotas ? `${quotas.volunteers.current}/${quotas.volunteers.max}` : '0/4'}):</strong> Strict maximum 4 volunteers permitted. Approvals are vetted by Administrator.
-                      </span>
-                    </div>
-                  )}
-
-                  {role === 'admin' && (
-                    <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-xs flex items-start gap-2">
-                      <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Admin Limit ({quotas ? `${quotas.admins.current}/${quotas.admins.max}` : '0/1'}):</strong> Strict maximum 1 platform administrator permitted. Admin gets master CRUD access over all modules.
-                      </span>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Full Candidate Name</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                        <User className="w-4 h-4" />
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Your legal or preferred name"
-                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Mobile Number</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-mono text-xs font-bold">
-                        +91
-                      </div>
-                      <input
-                        type="tel"
-                        required
-                        value={phoneInput}
-                        onChange={(e) => setPhoneInput(e.target.value)}
-                        placeholder="98765 43210"
-                        className="w-full pl-12 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {role === 'volunteer' && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">Operational Area</label>
-                        <input
-                          type="text"
-                          value={area}
-                          onChange={(e) => setArea(e.target.value)}
-                          placeholder="District or zone"
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">Skills</label>
-                        <div className="flex flex-wrap gap-1.5">
-                          {availableSkillsList.map(sk => (
-                            <button
-                              key={sk}
-                              type="button"
-                              onClick={() => toggleSkill(sk)}
-                              className={`text-[10px] px-2 py-1 rounded-lg border font-semibold transition-all ${
-                                selectedSkills.includes(sk)
-                                  ? 'bg-emerald-600 text-white border-emerald-600'
-                                  : 'bg-slate-100 text-slate-600 border-slate-200'
-                              }`}
-                            >
-                              {sk}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-              <div>
-                {mode === 'signin' && (
-                  <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl mb-3 text-xs text-indigo-900 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <span>CMS Administrator login active from <code>.env</code></span>
-                    </div>
-                    <span className="font-mono text-[10px] font-bold bg-white text-indigo-700 px-2 py-0.5 rounded border border-indigo-200">1 Admin Slot</span>
-                  </div>
-                )}
-                <label className="block text-xs font-bold text-slate-700 mb-1">Email or Mobile Number</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Mail className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="john@example.com or 9876543210"
-                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-md shadow-orange-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
-              >
-                {loading ? 'Authenticating...' : (mode === 'signin' && (emailInput.toLowerCase().includes('admin') || authMethod === 'password') ? 'Sign In as CMS Administrator' : 'Sign In with Password')}
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
           )}
 
-          {/* Toggle between OTP and Password method */}
-          <div className="mt-6 pt-5 border-t border-slate-100 text-center">
-            {authMethod === 'otp' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMethod('password');
-                  setError('');
-                }}
-                className="text-xs text-slate-500 hover:text-slate-800 font-semibold inline-flex items-center gap-1.5"
-              >
-                <Lock className="w-3.5 h-3.5 text-slate-400" />
-                <span>Use password login instead</span>
-              </button>
-            ) : (
+          {/* Toggle between Password and OTP */}
+          <div className="pt-4 border-t border-slate-100 text-center">
+            {authMethod === 'password' ? (
               <button
                 type="button"
                 onClick={() => {
@@ -910,9 +643,35 @@ function LoginContent() {
                 className="text-xs text-orange-600 hover:text-orange-700 font-bold inline-flex items-center gap-1.5"
               >
                 <KeyRound className="w-3.5 h-3.5" />
-                <span>Switch to OTP-based mobile & email login</span>
+                <span>Prefer to sign in with OTP instead? Click here</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMethod('password');
+                  setError('');
+                }}
+                className="text-xs text-slate-500 hover:text-slate-800 font-semibold inline-flex items-center gap-1.5"
+              >
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Switch back to password sign in</span>
               </button>
             )}
+          </div>
+
+          {/* Operations & CMS Staff Access Separation Notice */}
+          <div className="pt-4 border-t border-slate-100 text-center">
+            <p className="text-[11px] text-slate-400">
+              Are you an authorized Administrator or Field Volunteer?
+            </p>
+            <Link
+              href="/cms"
+              className="mt-1 text-xs font-bold text-slate-800 hover:text-orange-600 inline-flex items-center gap-1"
+            >
+              <span>Access CMS Operations Login Desk</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
         </div>
       </div>
@@ -924,7 +683,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <p className="text-xs font-bold text-slate-500">Loading Seva Authentication...</p>
+        <p className="text-xs font-bold text-slate-500">Loading Seva Donor Authentication...</p>
       </div>
     }>
       <LoginContent />

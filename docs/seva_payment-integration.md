@@ -436,3 +436,4 @@ The SEVA Platform payment integration workflow has been comprehensively verified
 - Instant, non-blocking reconciliation via client polling and serverless webhooks.
 - Automated tax compliance with Resend-powered 80G receipts.
 - Complete operational independence from proprietary payment aggregators.
+

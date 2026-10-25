@@ -81,26 +81,88 @@ const DonationSchema = new Schema({
   donorName: { type: String, required: true },
   donorEmail: { type: String, required: true },
   donorPhone: { type: String },
-  amount: { type: Number, required: true, min: 20 },
+  amount: { type: Number, required: true, min: [20, 'Minimum donation amount is ₹20 INR'] },
+  currency: { type: String, default: 'INR' },
   campaignId: { type: String },
   campaignTitle: { type: String },
   paymentMethod: { type: String, default: 'UPI' },
-  status: { type: String, default: 'Successful' },
+  status: {
+    type: String,
+    default: 'PENDING',
+    enum: [
+      'PENDING',
+      'PENDING_VERIFICATION',
+      'PROCESSING',
+      'SUCCESS',
+      'FAILED',
+      'REJECTED',
+      'REFUND_PENDING',
+      'REFUNDED',
+      'Pending',
+      'Successful',
+      'Verified',
+      'Verification Required'
+    ]
+  },
   transactionId: { type: String },
+  gatewayOrderId: { type: String },
+  gatewayPaymentId: { type: String },
   isAnonymous: { type: Boolean, default: false },
+  message: { type: String },
+  proofFile: { type: String },
+  verificationSource: { type: String },
+  verifiedBy: { type: String },
+  verifiedAt: { type: Schema.Types.Mixed },
+  rejectionReason: { type: String },
+  receiptId: { type: String },
+  notificationsSent: {
+    email: { type: Boolean, default: false },
+    sms: { type: Boolean, default: false }
+  },
+  auditHistory: [{
+    action: { type: String },
+    timestamp: { type: Date, default: Date.now },
+    actor: { type: String },
+    note: { type: String }
+  }],
   recurringFrequency: { type: String, default: 'None' },
   collectedBy: { type: String },
-  receiptNote: { type: String },
-  verifiedBy: { type: String },
-  verifiedAt: { type: Schema.Types.Mixed }
+  receiptNote: { type: String }
 }, { timestamps: true });
+
+// Indexes for fast lookup & deduplication
+DonationSchema.index({ transactionId: 1 });
+DonationSchema.index({ donorEmail: 1 });
+DonationSchema.index({ status: 1 });
+DonationSchema.index({ campaignId: 1 });
 
 // 7. Payment Model
 const PaymentSchema = new Schema({
   paymentId: { type: String, required: true, unique: true },
   donationId: { type: String, required: true },
-  amount: { type: Number, required: true },
-  status: { type: String, required: true }
+  orderId: { type: String },
+  amount: { type: Number, required: true, min: 20 },
+  currency: { type: String, default: 'INR' },
+  method: { type: String, default: 'UPI' },
+  status: {
+    type: String,
+    required: true,
+    enum: [
+      'PENDING',
+      'PENDING_VERIFICATION',
+      'PROCESSING',
+      'SUCCESS',
+      'FAILED',
+      'REJECTED',
+      'REFUND_PENDING',
+      'REFUNDED',
+      'Pending',
+      'Successful',
+      'Verified'
+    ]
+  },
+  utr: { type: String },
+  rawResponse: { type: Schema.Types.Mixed }
 }, { timestamps: true });
 
 // 8. Payment QR Model

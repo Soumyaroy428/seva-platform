@@ -313,3 +313,244 @@ export async function sendVolunteerStatusEmail({
   }
 }
 
+
+
+/**
+ * 4. Dispatch SMS Notification (Configurable Provider with Safe Mock Fallback)
+ */
+export async function sendSmsNotification({
+  toPhone,
+  message,
+  type = 'GENERAL'
+}: {
+  toPhone?: string;
+  message: string;
+  type?: 'DONATION_SUCCESS' | 'DONATION_PENDING' | 'DONATION_FAILED' | 'GENERAL';
+}): Promise<{ success: boolean; mocked?: boolean; error?: string }> {
+  if (!toPhone || toPhone.trim() === '') {
+    return { success: false, error: 'No phone number provided' };
+  }
+
+  const cleanPhone = toPhone.trim().replace(/[^\d+]/g, '');
+
+  // Fast2SMS integration if FAST2SMS_API_KEY is configured
+  const fast2SmsKey = process.env.FAST2SMS_API_KEY;
+  if (fast2SmsKey && fast2SmsKey.trim() !== '') {
+    try {
+      const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+        method: 'POST',
+        headers: {
+          'authorization': fast2SmsKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          route: 'q',
+          message,
+          language: 'english',
+          flash: 0,
+          numbers: cleanPhone.replace(/^\+91/, '')
+        })
+      });
+      const data: any = await res.json();
+      console.log(`📱 [Fast2SMS] Dispatched ${type} SMS to ${cleanPhone}:`, data?.message || 'Delivered');
+      return { success: true };
+    } catch (err: any) {
+      console.warn(`⚠️ [Fast2SMS Error] Failed to send SMS to ${cleanPhone}:`, err.message);
+    }
+  }
+
+  // Fallback: Safe Mock Logging (Never throws in dev/sandbox)
+  console.log(`📱 [SMS Gateway - ${type}] To: ${cleanPhone}\n   Content: "${message}"`);
+  return { success: true, mocked: true };
+}
+
+/**
+ * 5. Dispatch Donation Awaiting Verification Notification (Email & SMS)
+ */
+export async function sendDonationPendingNotification({
+  toEmail,
+  toPhone,
+  donation
+}: {
+  toEmail: string;
+  toPhone?: string;
+  donation: {
+    donationId: string;
+    donorName: string;
+    amount: number;
+    campaignTitle: string;
+  };
+}): Promise<ISendEmailResult> {
+  const resend = getResendClient();
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+          .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
+          .header { background: #d97706; padding: 28px 24px; color: #ffffff; text-align: center; }
+          .content { padding: 32px 24px; }
+          .badge { display: inline-block; padding: 6px 14px; border-radius: 9999px; font-weight: 800; font-size: 12px; background: #fef3c7; color: #92400e; }
+          .details { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0; }
+          .footer { background: #f1f5f9; padding: 16px; text-align: center; font-size: 11px; color: #64748b; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin:0; font-size: 22px;">SEVA FOUNDATION</h1>
+            <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Payment Submission Received</p>
+          </div>
+          <div class="content">
+            <p>Namaste <strong>${donation.donorName}</strong>,</p>
+            <p>Thank you for submitting your donation of <strong>₹${donation.amount.toLocaleString('en-IN')}</strong> to SEVA.</p>
+            
+            <div style="text-align: center; margin: 16px 0;">
+              <span class="badge">STATUS: AWAITING BANK RECONCILIATION</span>
+            </div>
+
+            <div class="details">
+              <p style="margin: 4px 0;"><strong>Donation ID:</strong> ${donation.donationId}</p>
+              <p style="margin: 4px 0;"><strong>Supported Campaign:</strong> ${donation.campaignTitle}</p>
+              <p style="margin: 4px 0;"><strong>Amount:</strong> ₹${donation.amount.toLocaleString('en-IN')}</p>
+            </div>
+
+            <p style="font-size: 13px; color: #475569;">
+              Your manual UPI payment is currently undergoing verification against our official bank statement by our authorized Admin team. As soon as the transaction is confirmed, your official 80G tax receipt will be generated and emailed to you.
+            </p>
+          </div>
+          <div class="footer">
+            SEVA Foundation • Toll-Free Helpline: +91 1800-SEVA-AID
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  // Dispatch SMS if phone is provided
+  if (toPhone) {
+    sendSmsNotification({
+      toPhone,
+      message: `Thank you for donating ₹${donation.amount} to Seva. Your payment submission is awaiting verification. Donation ID: ${donation.donationId}. We will notify you when the status is updated.`,
+      type: 'DONATION_PENDING'
+    }).catch(err => console.warn('Pending SMS warning:', err));
+  }
+
+  if (!resend) {
+    console.log(`ℹ️ [Resend Mock Mode] Pending email to "${toEmail}": Donation = ${donation.donationId}`);
+    return { success: true, mocked: true };
+  }
+
+  try {
+    const data = await resend.emails.send({
+      from: getFromEmail(),
+      to: [toEmail],
+      subject: `Your Seva Donation is Awaiting Verification [${donation.donationId}]`,
+      html
+    });
+    return { success: true, messageId: data.data?.id };
+  } catch (err: any) {
+    console.error(`❌ [Resend] Failed to send pending email to ${toEmail}:`, err);
+    return { success: false, error: err?.message || 'Failed to dispatch email' };
+  }
+}
+
+/**
+ * 6. Dispatch Donation Rejected / Failed Notification (Email & SMS)
+ */
+export async function sendDonationRejectedNotification({
+  toEmail,
+  toPhone,
+  donation,
+  rejectionReason
+}: {
+  toEmail: string;
+  toPhone?: string;
+  donation: {
+    donationId: string;
+    donorName: string;
+    amount: number;
+    campaignTitle: string;
+    transactionId?: string;
+  };
+  rejectionReason: string;
+}): Promise<ISendEmailResult> {
+  const resend = getResendClient();
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+          .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
+          .header { background: #b91c1c; padding: 28px 24px; color: #ffffff; text-align: center; }
+          .content { padding: 32px 24px; }
+          .badge { display: inline-block; padding: 6px 14px; border-radius: 9999px; font-weight: 800; font-size: 12px; background: #fee2e2; color: #991b1b; }
+          .reason-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 16px; margin: 20px 0; font-size: 13px; color: #991b1b; }
+          .footer { background: #f1f5f9; padding: 16px; text-align: center; font-size: 11px; color: #64748b; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin:0; font-size: 22px;">SEVA FOUNDATION</h1>
+            <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Payment Verification Notice</p>
+          </div>
+          <div class="content">
+            <p>Dear <strong>${donation.donorName}</strong>,</p>
+            <p>Your Seva donation payment submission of <strong>₹${donation.amount.toLocaleString('en-IN')}</strong> could not be confirmed.</p>
+            
+            <div style="text-align: center; margin: 16px 0;">
+              <span class="badge">STATUS: VERIFICATION REJECTED</span>
+            </div>
+
+            <div class="reason-box">
+              <strong>Reviewer Note:</strong> ${rejectionReason}
+            </div>
+
+            <p style="font-size: 13px; color: #475569;">
+              <strong>Donation ID:</strong> ${donation.donationId}<br>
+              <strong>Transaction Reference:</strong> ${donation.transactionId || 'N/A'}<br>
+              If money was deducted from your bank account, please contact our support desk immediately at <strong>support@seva.org</strong> or call our toll-free helpline with your bank UTR and account statement.
+            </p>
+          </div>
+          <div class="footer">
+            SEVA Foundation • Toll-Free Helpline: +91 1800-SEVA-AID
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  // Dispatch SMS if phone is provided
+  if (toPhone) {
+    sendSmsNotification({
+      toPhone,
+      message: `Your Seva donation payment could not be confirmed. Donation ID: ${donation.donationId}. If money was deducted, please contact Seva support with your transaction reference.`,
+      type: 'DONATION_FAILED'
+    }).catch(err => console.warn('Rejected SMS warning:', err));
+  }
+
+  if (!resend) {
+    console.log(`ℹ️ [Resend Mock Mode] Rejection email to "${toEmail}": Donation = ${donation.donationId}, Reason = ${rejectionReason}`);
+    return { success: true, mocked: true };
+  }
+
+  try {
+    const data = await resend.emails.send({
+      from: getFromEmail(),
+      to: [toEmail],
+      subject: `Important: Your Seva Donation Payment Could Not Be Confirmed [${donation.donationId}]`,
+      html
+    });
+    return { success: true, messageId: data.data?.id };
+  } catch (err: any) {
+    console.error(`❌ [Resend] Failed to send rejection email to ${toEmail}:`, err);
+    return { success: false, error: err?.message || 'Failed to dispatch email' };
+  }
+}
