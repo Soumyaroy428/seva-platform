@@ -23,7 +23,8 @@ This documentation directory contains comprehensive architectural, technical, op
 | **[5. Administrator Operations Guide](./ADMIN_GUIDE.md)** | In-depth manual covering all **16 Admin tabs**, live quota limits, payment QR approvals, content management, and audit logging. |
 | **[6. Setup, Configuration & Deployment](./SETUP_AND_DEPLOYMENT.md)** | Guide for environment variables (`.env`), Sovereign UPI Gateway (YouPI-PG) setup, Resend API, MongoDB Atlas connection, local development, and Vercel serverless deployment. |
 | **[7. Payment Integration Prompt & Technical Guide](./PAYMENT_INTEGRATION_PROMPT.md)** | Master prompt and technical integration blueprint for the Sovereign UPI Payment Gateway. |
-| **[8. Payment Integration Verification Runbook](./VERIFY_PAYMENT_INTEGRATION.md)** | Step-by-step test cases, cURL commands, webhook simulations, and 80G receipt verification procedures. |
+| **[8. Production Payment Integration Specification & Workflow](./seva_payment-integration.md)** | Verified production-ready end-to-end payment workflow specification, API contracts, dynamic UPI intents, webhook HMAC signatures, and Resend 80G tax receipt automation. |
+| **[9. Payment Integration Verification Runbook](./VERIFY_PAYMENT_INTEGRATION.md)** | Step-by-step test cases, cURL commands, webhook simulations, and 80G receipt verification procedures. |
 
 ---
 

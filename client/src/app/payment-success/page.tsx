@@ -73,14 +73,39 @@ function PaymentSuccessContent() {
     );
   }
 
-  const amount = (payment.amount / 100).toFixed(2);
-  const date = new Date(payment.created_at * 1000).toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  const formattedAmount = (
+    payment.amountPaise 
+      ? (Number(payment.amountPaise) / 100) 
+      : (Number(payment.amount) || 0)
+  ).toFixed(2);
+
+  const receiptId = payment.donationId || payment.id || payment.transactionId || 'SEVA-RECEIPT';
+  const donorDisplayName = payment.donorName || (payment.donorEmail ? payment.donorEmail.split('@')[0] : '') || (payment.email ? payment.email.split('@')[0] : 'Kind Donor');
+  const donorEmail = payment.donorEmail || payment.email || 'donor@example.com';
+  const donorPhone = payment.donorPhone || payment.contact || '';
+  const paymentMethod = payment.paymentMethod || payment.method || 'UPI';
+
+  const date = payment.createdAt 
+    ? new Date(payment.createdAt).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    : (payment.created_at 
+        ? new Date(payment.created_at * 1000).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        : new Date().toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          }));
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 print:p-0 print:bg-white">
@@ -115,7 +140,7 @@ function PaymentSuccessContent() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-slate-100 pb-8 gap-4">
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Receipt Number</p>
-                <p className="font-mono text-slate-800 font-bold text-lg">{payment.id}</p>
+                <p className="font-mono text-slate-800 font-bold text-lg">{receiptId}</p>
               </div>
               <div className="sm:text-right">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Date Paid</p>
@@ -126,9 +151,9 @@ function PaymentSuccessContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 border-b border-slate-100 pb-8">
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Billed To</p>
-                <p className="text-slate-800 font-black text-lg">{payment.email.split('@')[0] || 'Kind Donor'}</p>
-                <p className="text-slate-600 text-sm mt-1">{payment.email}</p>
-                <p className="text-slate-600 text-sm mt-1">{payment.contact}</p>
+                <p className="text-slate-800 font-black text-lg">{donorDisplayName}</p>
+                <p className="text-slate-600 text-sm mt-1">{donorEmail}</p>
+                {donorPhone && <p className="text-slate-600 text-sm mt-1">{donorPhone}</p>}
               </div>
               <div className="sm:text-right">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Organization</p>
@@ -145,8 +170,8 @@ function PaymentSuccessContent() {
                   <p className="text-xs font-medium text-slate-500 mt-1">Eligible for Section 80G Tax Deduction</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-black text-slate-800">₹{amount}</p>
-                  <p className="text-xs font-bold text-green-600 uppercase tracking-wider mt-1">Paid via {payment.method}</p>
+                  <p className="text-3xl font-black text-slate-800">₹{formattedAmount}</p>
+                  <p className="text-xs font-bold text-green-600 uppercase tracking-wider mt-1">Paid via {paymentMethod}</p>
                 </div>
               </div>
             </div>

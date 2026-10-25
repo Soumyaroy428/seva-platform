@@ -81,7 +81,7 @@ router.post('/create-session', async (req: Request, res: Response) => {
     const dynamicUpiIntent = `upi://pay?pa=${encodeURIComponent(upiPayeeAddress)}&pn=${encodeURIComponent(upiPayeeName)}&am=${amountFormatted}&cu=INR&tr=${orderId}&tn=${encodeURIComponent(`Donation ${orderId}`)}`;
 
     const resolvedPaymentId = gatewaySession?.paymentId || paymentId;
-    const checkoutUrl = gatewaySession?.checkoutUrl || `${checkoutBaseUrl}/pay/${resolvedPaymentId}`;
+    const checkoutUrl = gatewaySession?.checkoutUrl || `${checkoutBaseUrl}/checkout/${resolvedPaymentId}`;
 
     // Register session in store as Pending donation
     const donation = serverStore.createDonation({
@@ -121,7 +121,46 @@ router.get('/status/:paymentId', async (req: Request, res: Response) => {
   try {
     const { paymentId } = req.params;
     const donations = serverStore.getDonations();
-    const donation = donations.find(d => d.transactionId === paymentId || d.donationId === paymentId);
+    let donation = donations.find(d => d.transactionId === paymentId || d.donationId === paymentId);
+
+    // Active upstream sync with Sovereign Gateway daemon if session is still pending
+    if (donation && donation.status !== 'Successful' && donation.status !== 'Verified') {
+      try {
+        const youpiApiUrl = (process.env.YOUPI_API_URL || 'http://localhost:6100').replace(/\/+$/, '');
+        const upstreamRes = await fetch(`${youpiApiUrl}/api/v1/payments/${paymentId}`, {
+          signal: AbortSignal.timeout(2000)
+        }).catch(() => null);
+
+        if (upstreamRes && upstreamRes.ok) {
+          const upstreamData: any = await upstreamRes.json();
+          if (upstreamData && upstreamData.status === 'SUCCESS') {
+            const utr = upstreamData.utr || upstreamData.bankReference || 'AUTO-SETTLED';
+            serverStore.updateDonation(donation.id || donation.donationId || '', {
+              status: 'Successful',
+              receiptNote: `Authoritatively settled via Sovereign UPI Gateway. Bank UTR: ${utr}`
+            }, 'YouPI-Gateway-Poller');
+
+            // Dispatch 80G Receipt Email via Resend
+            if (donation.donorEmail && donation.donorEmail.includes('@')) {
+              sendDonationReceiptEmail({
+                to: donation.donorEmail,
+                donation: {
+                  donationId: donation.donationId,
+                  donorName: donation.donorName,
+                  amount: donation.amount,
+                  campaignTitle: donation.campaignTitle || 'General Hunger Relief & Kitchen Support',
+                  paymentMethod: 'UPI',
+                  transactionId: utr,
+                  createdAt: donation.createdAt
+                }
+              }).catch(err => console.warn('Resend 80G poller dispatch warning:', err.message));
+            }
+
+            donation = serverStore.getDonations().find(d => d.transactionId === paymentId || d.donationId === paymentId);
+          }
+        }
+      } catch {}
+    }
 
     if (!donation) {
       return res.status(404).json({ success: false, error: 'Payment session not found.' });
@@ -144,26 +183,33 @@ router.get('/status/:paymentId', async (req: Request, res: Response) => {
 // 3. POST /api/payments/webhook — Authoritative HMAC-SHA256 Signed Gateway Webhook
 router.post('/webhook', async (req: Request, res: Response) => {
   try {
-    const signature = (req.headers['x-gateway-signature'] || req.headers['x-youpi-signature']) as string;
+    const sigV1 = (req.headers['x-gateway-signature'] || req.headers['x-youpi-signature']) as string;
+    const sigV2 = req.headers['x-gateway-signature-v2'] as string;
+    const timestamp = req.headers['x-gateway-timestamp'] as string;
     const rawBody = (req as any).rawBody || JSON.stringify(req.body);
     const webhookSecret = process.env.YOUPI_WEBHOOK_SECRET || '7a5dc526e25a7d67d24238c6fd82e818558ffa88e83377e503350a618d975ebd';
 
-    // Cryptographic HMAC-SHA256 verification
-    if (signature) {
-      const cleanSignature = signature.replace(/^sha256=/, '').trim();
-      const computedSignature = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(rawBody, 'utf8')
-        .digest('hex');
+    // Cryptographic HMAC-SHA256 verification (supports V1 payload digest & V2 timestamped digest)
+    let isSignatureValid = false;
 
-      const isMatch = crypto.timingSafeEqual(
-        Buffer.from(cleanSignature, 'hex'),
-        Buffer.from(computedSignature, 'hex')
-      );
+    if (sigV2 && timestamp) {
+      const cleanV2 = sigV2.replace(/^sha256=/, '').trim();
+      const expectedV2 = crypto.createHmac('sha256', webhookSecret).update(`${timestamp}.${rawBody}`, 'utf8').digest('hex');
+      try {
+        isSignatureValid = crypto.timingSafeEqual(Buffer.from(cleanV2, 'hex'), Buffer.from(expectedV2, 'hex'));
+      } catch {}
+    }
 
-      if (!isMatch && process.env.NODE_ENV === 'production') {
-        return res.status(401).json({ success: false, error: 'Invalid HMAC signature.' });
-      }
+    if (!isSignatureValid && sigV1) {
+      const cleanV1 = sigV1.replace(/^sha256=/, '').trim();
+      const expectedV1 = crypto.createHmac('sha256', webhookSecret).update(rawBody, 'utf8').digest('hex');
+      try {
+        isSignatureValid = crypto.timingSafeEqual(Buffer.from(cleanV1, 'hex'), Buffer.from(expectedV1, 'hex'));
+      } catch {}
+    }
+
+    if ((sigV1 || sigV2) && !isSignatureValid && process.env.NODE_ENV === 'production') {
+      return res.status(401).json({ success: false, error: 'Invalid HMAC signature.' });
     }
 
     const event = req.body;

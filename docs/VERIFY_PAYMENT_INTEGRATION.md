@@ -231,3 +231,4 @@ git grep -i "razorpay" -- :!docs/
 ```
 
 **Result:** Zero matches outside historical reference documentation.
+
