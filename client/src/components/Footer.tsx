@@ -49,14 +49,13 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Col 3: Operational Portals */}
+          {/* Col 3: Community & Governance */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white">Role Portals</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-white">Community & Governance</h4>
             <ul className="space-y-2 text-xs">
-              <li><Link href="/admin" className="hover:text-orange-400 transition-colors">Admin Control Center</Link></li>
               <li><Link href="/donor" className="hover:text-orange-400 transition-colors">Donor Dashboard</Link></li>
-              <li><Link href="/volunteer" className="hover:text-orange-400 transition-colors">Volunteer Hub</Link></li>
               <li><Link href="/beneficiary" className="hover:text-orange-400 transition-colors">Beneficiary Pass</Link></li>
+              <li><Link href="#volunteers-admins" className="hover:text-orange-400 transition-colors">Volunteers & Admins Section</Link></li>
               <li><Link href="#faq" className="hover:text-orange-400 transition-colors">Rules & FAQ</Link></li>
             </ul>
           </div>
