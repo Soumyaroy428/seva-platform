@@ -8,7 +8,7 @@ export interface AuthenticatedRequest extends Request {
 /**
  * Extracts and validates the session token from Authorization header or HTTP-only cookie.
  */
-export function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
   const cookieToken = (req as any).cookies?.seva_session;
@@ -39,7 +39,10 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
     });
   }
 
-  const user = serverStore.getUserFromToken(token);
+  let user = serverStore.getUserFromToken(token);
+  if (!user) {
+    user = await serverStore.resolveUserFromToken(token);
+  }
   if (!user) {
     return res.status(401).json({
       success: false,

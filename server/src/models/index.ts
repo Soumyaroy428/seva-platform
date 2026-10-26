@@ -347,6 +347,17 @@ const RightHeroCardSchema = new Schema({
   updatedBy: { type: String, default: 'Admin' }
 }, { timestamps: true });
 
+// 26. Distributed OTP Model (Distributed across serverless lambdas with TTL index)
+const OtpSchema = new Schema({
+  key: { type: String, required: true, index: true },
+  identifier: { type: String, required: true },
+  code: { type: String, required: true },
+  intent: { type: String, enum: ['login', 'register'], default: 'login' },
+  registerData: { type: Schema.Types.Mixed },
+  attempts: { type: Number, default: 0 },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } }
+}, { timestamps: true });
+
 function getOrCreateModel(modelName: string, schema: Schema): any {
   if ((mongoose.models as any)[modelName]) {
     return (mongoose.models as any)[modelName];
@@ -379,4 +390,5 @@ export const SettingModel: any = getOrCreateModel('Setting', SettingSchema);
 export const HowItWorksModel: any = getOrCreateModel('HowItWorks', HowItWorksSchema);
 export const FAQModel: any = getOrCreateModel('FAQ', FAQSchema);
 export const RightHeroCardModel: any = getOrCreateModel('RightHeroCard', RightHeroCardSchema);
+export const OtpModel: any = getOrCreateModel('Otp', OtpSchema);
 

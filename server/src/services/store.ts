@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import {
   UserModel,
   VolunteerModel,
@@ -13,7 +14,8 @@ import {
   CommitteeMemberModel,
   ExpenseModel,
   RightHeroCardModel,
-  DistributionEventModel
+  DistributionEventModel,
+  OtpModel
 } from '../models';
 
 import bcrypt from 'bcryptjs';
@@ -2027,7 +2029,22 @@ class SevaServerStore {
   }
 
   findUserByEmail(email: string) {
-    return this.users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
+    if (!email) return undefined;
+    const clean = email.trim().toLowerCase();
+    return this.users.find(u => u.email && u.email.trim().toLowerCase() === clean);
+  }
+
+  findUserByPhone(phone: string) {
+    if (!phone) return undefined;
+    const digits = phone.replace(/\D/g, '');
+    const key = digits.length >= 10 ? digits.slice(-10) : digits;
+    if (!key) return undefined;
+    return this.users.find(u => {
+      if (!u.phone) return false;
+      const uDigits = u.phone.replace(/\D/g, '');
+      const uKey = uDigits.length >= 10 ? uDigits.slice(-10) : uDigits;
+      return uKey === key;
+    });
   }
 
   normalizeIdentifier(rawId: string): { type: 'email' | 'phone'; key: string } {
@@ -2075,13 +2092,60 @@ class SevaServerStore {
     });
   }
 
-  sendOTP(rawIdentifier: string, intent: 'login' | 'register', registerData?: any) {
+  async resolveUserByIdentifier(identifier: string): Promise<IUser | undefined> {
+    const inMem = this.findUserByIdentifier(identifier);
+    if (inMem) return inMem;
+
+    const { type, key } = this.normalizeIdentifier(identifier);
+    if (!key) return undefined;
+
+    try {
+      if (mongoose.connection.readyState === 1) {
+        let dbUser = null;
+        if (type === 'email') {
+          dbUser = await UserModel.findOne({ email: key }).lean();
+        } else {
+          dbUser = await UserModel.findOne({ phone: { $regex: key + '$' } }).lean();
+        }
+
+        if (dbUser) {
+          const user: IUser = {
+            id: dbUser.id || (dbUser as any)._id?.toString(),
+            name: dbUser.name,
+            email: dbUser.email,
+            password: dbUser.password,
+            role: dbUser.role as any,
+            volunteerStatus: dbUser.volunteerStatus as any,
+            volunteerId: dbUser.volunteerId,
+            phone: dbUser.phone,
+            area: dbUser.area,
+            skills: dbUser.skills,
+            availability: dbUser.availability,
+            avatar: dbUser.avatar,
+            token: dbUser.token,
+            tokenCreatedAt: dbUser.tokenCreatedAt,
+            tokenExpiresAt: dbUser.tokenExpiresAt,
+            failedLoginAttempts: dbUser.failedLoginAttempts || 0,
+            lockUntil: dbUser.lockUntil,
+            createdAt: dbUser.createdAt ? new Date(dbUser.createdAt).toISOString() : new Date().toISOString()
+          };
+          this.users.push(user);
+          return user;
+        }
+      }
+    } catch (err: any) {
+      console.warn('⚠️ resolveUserByIdentifier DB fallback error:', err.message);
+    }
+    return undefined;
+  }
+
+  async sendOTP(rawIdentifier: string, intent: 'login' | 'register', registerData?: any) {
     const { type, key } = this.normalizeIdentifier(rawIdentifier);
     if (!key || (type === 'phone' && key.length < 10) || (type === 'email' && !key.includes('@'))) {
       throw new Error('Please provide a valid 10-digit mobile number or email address.');
     }
 
-    const existingUser = this.findUserByIdentifier(rawIdentifier);
+    const existingUser = await this.resolveUserByIdentifier(rawIdentifier);
 
     if (intent === 'login') {
       if (!existingUser) {
@@ -2089,7 +2153,20 @@ class SevaServerStore {
       }
     } else {
       if (existingUser) {
-        throw new Error(`An account already exists with this ${type === 'phone' ? 'mobile number' : 'email'}. Please sign in with OTP instead.`);
+        throw new Error(`An account already exists with this ${type === 'phone' ? 'mobile number' : 'email'}. Please sign in with OTP or password instead.`);
+      }
+
+      if (registerData?.email) {
+        const altEmailUser = await this.resolveUserByIdentifier(registerData.email);
+        if (altEmailUser) {
+          throw new Error('An account with this email address already exists. Please log in.');
+        }
+      }
+      if (registerData?.phone) {
+        const altPhoneUser = await this.resolveUserByIdentifier(registerData.phone);
+        if (altPhoneUser) {
+          throw new Error('An account with this mobile number already exists. Please log in.');
+        }
       }
 
       const maxAdmins = Number(this.settings.maxAdmins) > 0 ? Number(this.settings.maxAdmins) : (process.env.MAX_ADMINS ? Number(process.env.MAX_ADMINS) : 1);
@@ -2114,6 +2191,7 @@ class SevaServerStore {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
+    // Store in-memory cache
     this.otps.set(key, {
       identifier: rawIdentifier,
       code,
@@ -2122,6 +2200,23 @@ class SevaServerStore {
       registerData
     });
 
+    // Store in MongoDB Atlas (Persisted across all Vercel serverless lambdas)
+    if (mongoose.connection.readyState === 1) {
+      await OtpModel.findOneAndUpdate(
+        { key },
+        {
+          key,
+          identifier: rawIdentifier,
+          code,
+          intent,
+          registerData,
+          attempts: 0,
+          expiresAt: new Date(expiresAt)
+        },
+        { upsert: true, new: true }
+      ).catch((err: any) => console.warn('⚠️ OtpModel upsert error:', err.message));
+    }
+
     this.logAudit(
       rawIdentifier,
       'OTP_SENT',
@@ -2129,55 +2224,87 @@ class SevaServerStore {
       `Sent 6-digit OTP code to ${type === 'phone' ? 'mobile' : 'email'} ${rawIdentifier} (${intent})`
     );
 
-    // Dispatch OTP via Resend if email identifier or user has email
+    // Dispatch OTP via Resend if email target is identified
     const emailTarget = type === 'email' ? rawIdentifier : (existingUser?.email || registerData?.email);
+    let emailStatus: any = { dispatched: false };
     if (emailTarget && emailTarget.includes('@')) {
-      sendOtpEmail({
+      const emailResult = await sendOtpEmail({
         to: emailTarget,
         name: existingUser?.name || registerData?.name,
         code,
         intent
-      }).catch(err => console.warn('Resend OTP email error:', err));
+      });
+      emailStatus = {
+        dispatched: emailResult.success,
+        mocked: emailResult.mocked,
+        messageId: emailResult.messageId,
+        error: emailResult.error
+      };
     }
 
     return {
       success: true,
-      message: `Verification code sent to ${rawIdentifier}.`,
+      message: `Verification code sent to ${rawIdentifier}${emailTarget && emailTarget !== rawIdentifier ? ' and ' + emailTarget : ''}.`,
       type,
       identifier: rawIdentifier,
+      emailStatus,
       ...(process.env.NODE_ENV === 'test' ? { otpPreview: code } : {}),
       expiresInMinutes: 10
     };
   }
 
-  verifyOTP(rawIdentifier: string, inputCode: string, extraRegisterData?: any) {
+  async verifyOTP(rawIdentifier: string, inputCode: string, extraRegisterData?: any) {
     const { type, key } = this.normalizeIdentifier(rawIdentifier);
     if (!key) throw new Error('Invalid mobile number or email.');
 
-    const entry = this.otps.get(key);
+    let entry = this.otps.get(key);
+
+    // Cross-lambda resolution from MongoDB Atlas
+    if (!entry && mongoose.connection.readyState === 1) {
+      const dbEntry = await OtpModel.findOne({ key }).lean();
+      if (dbEntry) {
+        entry = {
+          identifier: dbEntry.identifier,
+          code: dbEntry.code,
+          expiresAt: new Date(dbEntry.expiresAt).getTime(),
+          intent: dbEntry.intent as any,
+          registerData: dbEntry.registerData,
+          attempts: dbEntry.attempts || 0
+        };
+      }
+    }
+
     if (!entry) {
       throw new Error('No OTP request found for this mobile or email. Please request a new verification code.');
     }
 
     if (Date.now() > entry.expiresAt) {
       this.otps.delete(key);
+      if (mongoose.connection.readyState === 1) await OtpModel.deleteOne({ key }).catch(() => {});
       throw new Error('Verification code has expired. Please request a new OTP.');
     }
 
     if (entry.code !== (inputCode || '').trim()) {
       entry.attempts = (entry.attempts || 0) + 1;
+      if (mongoose.connection.readyState === 1) {
+        await OtpModel.updateOne({ key }, { $inc: { attempts: 1 } }).catch(() => {});
+      }
       if (entry.attempts >= 5) {
         this.otps.delete(key);
+        if (mongoose.connection.readyState === 1) await OtpModel.deleteOne({ key }).catch(() => {});
         throw new Error('Maximum verification attempts exceeded (5/5). Code invalidated for security. Please request a new OTP.');
       }
       throw new Error(`Incorrect verification code. ${5 - entry.attempts} attempt(s) remaining.`);
     }
 
-    // OTP matched! Remove to prevent reuse
+    // OTP matched! Remove to prevent replay attacks
     this.otps.delete(key);
+    if (mongoose.connection.readyState === 1) {
+      await OtpModel.deleteOne({ key }).catch(() => {});
+    }
 
     if (entry.intent === 'login') {
-      const user = this.findUserByIdentifier(rawIdentifier);
+      const user = await this.resolveUserByIdentifier(rawIdentifier);
       if (!user) {
         throw new Error('User account not found.');
       }
@@ -2191,6 +2318,17 @@ class SevaServerStore {
       }
 
       this.generateSecureSessionToken(user);
+
+      if (mongoose.connection.readyState === 1) {
+        await UserModel.updateOne({ email: user.email }, {
+          $set: {
+            token: user.token,
+            tokenCreatedAt: user.tokenCreatedAt,
+            tokenExpiresAt: user.tokenExpiresAt
+          }
+        }).catch(() => {});
+      }
+
       const { password, ...safeUser } = user;
       this.logAudit(user.email || user.phone || 'OTP_User', 'OTP_LOGIN', 'User', `Logged in via ${type} OTP verification as ${user.role}`);
       return safeUser;
@@ -2200,11 +2338,11 @@ class SevaServerStore {
       const email = type === 'email' ? rawIdentifier.trim().toLowerCase() : (regData.email || `user_${Date.now()}@seva.org`);
       const phone = type === 'phone' ? rawIdentifier.trim() : (regData.phone || '');
 
-      const newUser = this.createUser({
+      const newUser = await this.createUser({
         name: regData.name || (type === 'phone' ? `Seva Member (${key.slice(-4)})` : 'Seva Member'),
         email,
         phone,
-        password: regData.password || `otp_auth_${Date.now()}`,
+        password: regData.password || crypto.randomBytes(16).toString('hex'),
         role: regData.role || 'donor',
         area: regData.area,
         skills: regData.skills,
@@ -2216,7 +2354,7 @@ class SevaServerStore {
     }
   }
 
-  createUser(data: {
+  async createUser(data: {
     name: string;
     email: string;
     password: string;
@@ -2226,9 +2364,37 @@ class SevaServerStore {
     skills?: string[];
     availability?: string;
   }) {
-    const existing = this.findUserByEmail(data.email);
-    if (existing) {
-      throw new Error('An account with this email address already exists.');
+    const cleanEmail = (data.email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('A valid email address is required.');
+    }
+
+    // 1. Strict duplicate check on email (Memory + MongoDB Atlas)
+    const existingEmailInMem = this.findUserByEmail(cleanEmail);
+    if (existingEmailInMem) {
+      throw new Error('An account with this email address already exists. Please log in.');
+    }
+    if (mongoose.connection.readyState === 1) {
+      const existingEmailInDb = await UserModel.findOne({ email: cleanEmail }).lean();
+      if (existingEmailInDb) {
+        throw new Error('An account with this email address already exists. Please log in.');
+      }
+    }
+
+    // 2. Strict duplicate check on mobile number (Memory + MongoDB Atlas)
+    const cleanPhoneDigits = (data.phone || '').replace(/\D/g, '');
+    if (cleanPhoneDigits.length >= 10) {
+      const phoneSuffix = cleanPhoneDigits.slice(-10);
+      const existingPhoneInMem = this.findUserByPhone(phoneSuffix);
+      if (existingPhoneInMem) {
+        throw new Error('An account with this mobile number already exists. Please log in.');
+      }
+      if (mongoose.connection.readyState === 1) {
+        const existingPhoneInDb = await UserModel.findOne({ phone: { $regex: phoneSuffix + '$' } }).lean();
+        if (existingPhoneInDb) {
+          throw new Error('An account with this mobile number already exists. Please log in.');
+        }
+      }
     }
 
     // Role capacity enforcement
@@ -2253,11 +2419,11 @@ class SevaServerStore {
 
     const newUser: IUser = {
       id: `usr-${Date.now()}`,
-      name: data.name,
-      email: data.email,
+      name: data.name.trim(),
+      email: cleanEmail,
       password: bcrypt.hashSync(data.password, 10),
       role: data.role,
-      phone: data.phone || '',
+      phone: data.phone ? data.phone.trim() : '',
       area: data.area || '',
       skills: data.skills || [],
       availability: data.availability || 'Weekends',
@@ -2273,12 +2439,12 @@ class SevaServerStore {
       const volEntry = {
         id: `vol-${Date.now()}`,
         volunteerId: volunteerId!,
-        name: data.name,
-        email: data.email,
-        phone: data.phone || '',
-        area: data.area || 'General District',
-        skills: data.skills && data.skills.length > 0 ? data.skills : ['Field Assistance'],
-        availability: (data.availability as any) || 'Weekends',
+        name: newUser.name,
+        email: newUser.email,
+        phone: newUser.phone || '',
+        area: newUser.area || 'General District',
+        skills: newUser.skills && newUser.skills.length > 0 ? newUser.skills : ['Field Assistance'],
+        availability: (newUser.availability as any) || 'Weekends',
         status: 'Pending' as const,
         hoursLogged: 0,
         tasksCompleted: 0,
@@ -2286,28 +2452,42 @@ class SevaServerStore {
       };
       this.volunteers.push(volEntry);
 
-      // Persist volunteer to MongoDB Atlas
-      VolunteerModel.create(volEntry).catch((err: any) => console.warn('⚠️ MongoDB Atlas Volunteer save error:', err.message));
+      if (mongoose.connection.readyState === 1) {
+        await VolunteerModel.create(volEntry).catch((err: any) => console.warn('⚠️ MongoDB Atlas Volunteer save error:', err.message));
+      }
     }
 
     this.users.push(newUser);
     this.logAudit(newUser.email, 'USER_REGISTERED', 'User', `Registered as ${newUser.role} (Status: ${newUser.volunteerStatus || 'Active'})`);
 
-    // Persist user to MongoDB Atlas
-    UserModel.create({
-      id: newUser.id,
-      name: newUser.name,
-      email: newUser.email,
-      password: newUser.password,
-      role: newUser.role,
-      phone: newUser.phone,
-      area: newUser.area,
-      skills: newUser.skills,
-      availability: newUser.availability,
-      volunteerStatus: newUser.volunteerStatus,
-      volunteerId: newUser.volunteerId,
-      token: newUser.token
-    }).catch((err: any) => console.warn('⚠️ MongoDB Atlas User save error:', err.message));
+    // Persist user to MongoDB Atlas (Awaited for immediate consistency)
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await UserModel.create({
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          password: newUser.password,
+          role: newUser.role,
+          phone: newUser.phone,
+          area: newUser.area,
+          skills: newUser.skills,
+          availability: newUser.availability,
+          volunteerStatus: newUser.volunteerStatus,
+          volunteerId: newUser.volunteerId,
+          token: newUser.token,
+          tokenCreatedAt: newUser.tokenCreatedAt,
+          tokenExpiresAt: newUser.tokenExpiresAt,
+          failedLoginAttempts: 0,
+          isActive: true
+        });
+      } catch (err: any) {
+        console.warn('⚠️ MongoDB Atlas User save error:', err.message);
+        if (err.code === 11000) {
+          throw new Error('An account with this email address already exists. Please log in.');
+        }
+      }
+    }
 
     const { password, ...safeUser } = newUser;
     return safeUser;
@@ -2408,7 +2588,7 @@ class SevaServerStore {
     }
   }
 
-  authenticateUser(identifier: string, pass: string) {
+  async authenticateUser(identifier: string, pass: string) {
     this.initEnvAccounts();
     const norm = this.normalizeIdentifier(identifier);
     const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
@@ -2488,12 +2668,7 @@ class SevaServerStore {
     }
 
     // 3. Donor Authentication (Email or Mobile Number + Password)
-    let user;
-    if (norm.type === 'email') {
-      user = this.findUserByEmail(norm.key);
-    } else {
-      user = this.users.find(u => u.phone && u.phone.replace(/\D/g, '').endsWith(norm.key));
-    }
+    let user = await this.resolveUserByIdentifier(identifier);
     
     if (!user) {
       throw new Error('Invalid email, mobile number, or password.');
@@ -2521,8 +2696,14 @@ class SevaServerStore {
       if (user.failedLoginAttempts >= 5) {
         user.lockUntil = Date.now() + 15 * 60 * 1000;
         user.failedLoginAttempts = 0;
+        if (mongoose.connection.readyState === 1) {
+          UserModel.updateOne({ email: user.email }, { $set: { failedLoginAttempts: 0, lockUntil: user.lockUntil } }).catch(() => {});
+        }
         this.logAudit(user.email, 'ACCOUNT_LOCKED', 'User', 'Locked account for 15 minutes after 5 consecutive failed login attempts.');
         throw new Error('Account temporarily locked due to 5 consecutive failed login attempts. Please try again in 15 minutes.');
+      }
+      if (mongoose.connection.readyState === 1) {
+        UserModel.updateOne({ email: user.email }, { $set: { failedLoginAttempts: user.failedLoginAttempts } }).catch(() => {});
       }
       throw new Error(`Invalid email, mobile number, or password. ${5 - user.failedLoginAttempts} attempt(s) remaining before temporary account lockout.`);
     }
@@ -2539,6 +2720,20 @@ class SevaServerStore {
     }
 
     this.generateSecureSessionToken(user);
+
+    // Persist refreshed session token to MongoDB Atlas
+    if (mongoose.connection.readyState === 1) {
+      await UserModel.updateOne({ email: user.email }, {
+        $set: {
+          token: user.token,
+          tokenCreatedAt: user.tokenCreatedAt,
+          tokenExpiresAt: user.tokenExpiresAt,
+          failedLoginAttempts: 0,
+          lockUntil: null
+        }
+      }).catch(() => {});
+    }
+
     const { password, ...safeUser } = user;
     this.logAudit(user.email, 'USER_LOGIN', 'User', `Logged in as ${user.role} (Volunteer Status: ${user.volunteerStatus || 'N/A'})`);
     return safeUser;
@@ -2559,9 +2754,49 @@ class SevaServerStore {
       delete user.token;
       delete user.tokenCreatedAt;
       delete user.tokenExpiresAt;
+      if (mongoose.connection.readyState === 1) {
+        UserModel.updateOne({ email: user.email }, {
+          $unset: { token: 1, tokenCreatedAt: 1, tokenExpiresAt: 1 }
+        }).catch(() => {});
+      }
       return true;
     }
     return false;
+  }
+
+  async resolveUserFromToken(token: string) {
+    if (!token) return null;
+    const inMem = this.getUserFromToken(token);
+    if (inMem) return inMem;
+
+    if (mongoose.connection.readyState === 1) {
+      const dbUser = await UserModel.findOne({ token }).lean();
+      if (dbUser) {
+        const u: IUser = {
+          id: dbUser.id || (dbUser as any)._id?.toString(),
+          name: dbUser.name,
+          email: dbUser.email,
+          password: dbUser.password,
+          role: dbUser.role as any,
+          volunteerStatus: dbUser.volunteerStatus as any,
+          volunteerId: dbUser.volunteerId,
+          phone: dbUser.phone,
+          area: dbUser.area,
+          skills: dbUser.skills,
+          availability: dbUser.availability,
+          avatar: dbUser.avatar,
+          token: dbUser.token,
+          tokenCreatedAt: dbUser.tokenCreatedAt,
+          tokenExpiresAt: dbUser.tokenExpiresAt,
+          failedLoginAttempts: dbUser.failedLoginAttempts || 0,
+          lockUntil: dbUser.lockUntil,
+          createdAt: dbUser.createdAt ? new Date(dbUser.createdAt).toISOString() : new Date().toISOString()
+        };
+        this.users.push(u);
+        return this.getUserFromToken(token);
+      }
+    }
+    return null;
   }
 
   getUserFromToken(token: string) {

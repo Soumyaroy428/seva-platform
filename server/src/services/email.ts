@@ -88,14 +88,18 @@ export async function sendOtpEmail({
   }
 
   try {
-    const data = await resend.emails.send({
+    const response = await resend.emails.send({
       from: getFromEmail(),
       to: [to],
       subject: `SEVA Platform — Your Verification Code: ${code}`,
       html
     });
-    console.log(`✅ [Resend] Dispatched OTP email to ${to} (Message ID: ${data.data?.id})`);
-    return { success: true, messageId: data.data?.id };
+    if (response.error) {
+      console.error(`❌ [Resend] API rejected OTP email to ${to}:`, response.error);
+      return { success: false, error: response.error.message || 'Resend rejected email dispatch' };
+    }
+    console.log(`✅ [Resend] Dispatched OTP email to ${to} (Message ID: ${response.data?.id})`);
+    return { success: true, messageId: response.data?.id };
   } catch (err: any) {
     console.error(`❌ [Resend] Failed to send OTP email to ${to}:`, err);
     return { success: false, error: err?.message || 'Failed to dispatch email' };
