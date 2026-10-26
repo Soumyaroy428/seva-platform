@@ -128,10 +128,15 @@ router.get('/status/:paymentId', async (req: Request, res: Response) => {
   try {
     const { paymentId } = req.params;
     const donations = serverStore.getDonations();
-    let donation = donations.find(d => d.transactionId === paymentId || d.donationId === paymentId);
+    let donation = donations.find(d => 
+      d.transactionId === paymentId || 
+      d.donationId === paymentId || 
+      d.gatewayPaymentId === paymentId || 
+      d.gatewayOrderId === paymentId
+    );
 
     // Active upstream sync with Sovereign Gateway daemon if session is still pending
-    if (donation && donation.status !== 'Successful' && donation.status !== 'Verified') {
+    if (donation && donation.status !== 'Successful' && donation.status !== 'Verified' && donation.status !== 'SUCCESS') {
       try {
         const youpiApiUrl = (process.env.YOUPI_API_URL || 'http://localhost:6100').replace(/\/+$/, '');
         const upstreamRes = await fetch(`${youpiApiUrl}/api/v1/payments/${paymentId}`, {
@@ -163,7 +168,12 @@ router.get('/status/:paymentId', async (req: Request, res: Response) => {
               }).catch(err => console.warn('Resend 80G poller dispatch warning:', err.message));
             }
 
-            donation = serverStore.getDonations().find(d => d.transactionId === paymentId || d.donationId === paymentId);
+            donation = serverStore.getDonations().find(d => 
+              d.transactionId === paymentId || 
+              d.donationId === paymentId || 
+              d.gatewayPaymentId === paymentId || 
+              d.gatewayOrderId === paymentId
+            );
           }
         }
       } catch {}
@@ -178,7 +188,7 @@ router.get('/status/:paymentId', async (req: Request, res: Response) => {
       paymentId,
       orderId: donation.transactionId,
       donationId: donation.donationId,
-      status: donation.status === 'Successful' || donation.status === 'Verified' ? 'SUCCESS' : 'PENDING',
+      status: (donation.status === 'SUCCESS' || donation.status === 'Successful' || donation.status === 'Verified') ? 'SUCCESS' : donation.status,
       amount: donation.amount,
       donation
     });

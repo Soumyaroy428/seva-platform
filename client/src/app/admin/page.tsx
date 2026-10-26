@@ -1425,10 +1425,10 @@ function AdminDashboardContent() {
 
           <div className="space-y-3 pt-2">
             <Link
-              href="/login?redirect=/admin&role=admin"
+              href="/cms?redirect=/admin&role=admin"
               className="w-full py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-500/20"
             >
-              <span>Sign In to Admin Hub with OTP</span>
+              <span>Sign In to Admin Hub (CMS)</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>

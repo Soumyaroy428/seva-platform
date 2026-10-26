@@ -174,7 +174,10 @@ export default function PaymentManagementSection({
       setSubmittingAction(true);
       const res = await fetch(`/api/donations/${id}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(currentUser?.token ? { 'Authorization': `Bearer ${currentUser.token}` } : {})
+        },
         body: JSON.stringify({
           reviewer: currentUser?.name || 'Chief Administrator',
           notes: `Verified against bank credit statement by ${currentUser?.name || 'Administrator'}`
@@ -209,7 +212,10 @@ export default function PaymentManagementSection({
       setSubmittingAction(true);
       const res = await fetch(`/api/donations/${id}/reject`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(currentUser?.token ? { 'Authorization': `Bearer ${currentUser.token}` } : {})
+        },
         body: JSON.stringify({
           reviewer: currentUser?.name || 'Chief Administrator',
           rejectionReason: rejectionReason.trim()

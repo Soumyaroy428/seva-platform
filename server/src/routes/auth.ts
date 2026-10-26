@@ -118,26 +118,13 @@ router.post('/verify-otp', (req: Request, res: Response) => {
 router.get('/me', (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
-    let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
-    const email = req.query.email as string;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
 
-    let user = null;
-    if (token) {
-      user = serverStore.getUserFromToken(token);
-    } else if (email) {
-      const found = serverStore.findUserByEmail(email);
-      if (found) {
-        if (found.role === 'volunteer') {
-          const vol = serverStore.getVolunteers().find(v => v.email.toLowerCase() === found.email.toLowerCase() || (found.volunteerId && v.volunteerId === found.volunteerId));
-          if (vol) {
-            found.volunteerStatus = vol.status;
-          }
-        }
-        const { password, ...safeUser } = found;
-        user = safeUser;
-      }
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Authentication required. Missing Bearer token.' });
     }
 
+    const user = serverStore.getUserFromToken(token);
     if (!user) {
       return res.status(401).json({ success: false, error: 'Session expired or user not found.' });
     }

@@ -242,10 +242,10 @@ export default function VolunteerDashboard() {
 
           <div className="space-y-3 pt-2">
             <Link
-              href="/login?redirect=/volunteer&role=volunteer"
+              href="/cms?redirect=/volunteer&role=volunteer"
               className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-500/20"
             >
-              <span>Sign In to Volunteer Hub with OTP</span>
+              <span>Sign In to Volunteer Hub (CMS)</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>

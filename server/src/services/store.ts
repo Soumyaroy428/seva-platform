@@ -2120,7 +2120,7 @@ class SevaServerStore {
       message: `Verification code sent to ${rawIdentifier}.`,
       type,
       identifier: rawIdentifier,
-      otpPreview: code,
+      ...(process.env.NODE_ENV === 'test' ? { otpPreview: code } : {}),
       expiresInMinutes: 10
     };
   }
@@ -2693,6 +2693,13 @@ class SevaServerStore {
         paymentMethod: d.paymentMethod,
         status: d.status,
         transactionId: d.transactionId,
+        gatewayOrderId: d.gatewayOrderId,
+        gatewayPaymentId: d.gatewayPaymentId,
+        receiptId: d.receiptId,
+        rejectionReason: d.rejectionReason,
+        verificationSource: d.verificationSource,
+        auditHistory: d.auditHistory,
+        notificationsSent: d.notificationsSent,
         isAnonymous: d.isAnonymous,
         recurringFrequency: d.recurringFrequency,
         collectedBy: d.collectedBy,

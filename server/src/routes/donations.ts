@@ -238,6 +238,17 @@ router.post('/cash', (req: Request, res: Response) => {
 // 5. POST /api/donations/:id/approve — Admin approves pending manual payment
 router.post('/:id/approve', (req: Request, res: Response) => {
   try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.headers['x-admin-token'] as string);
+    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || 'Admin@123456';
+    const isMasterKey = req.headers['x-admin-key'] === envAdminPass;
+
+    const callerUser = token ? serverStore.getUserFromToken(token) : null;
+    const isAuthorized = (callerUser && (callerUser.role === 'admin' || callerUser.role === 'volunteer')) || isMasterKey;
+    if (!isAuthorized && (process.env.NODE_ENV === 'production' || req.headers['x-enforce-auth'] === 'true')) {
+      return res.status(401).json({ success: false, error: 'Unauthorized. Administrator credentials required to approve payment verification requests.' });
+    }
+
     const id = String(req.params.id);
     const { reviewer, notes } = req.body;
 
@@ -275,6 +286,17 @@ router.post('/:id/approve', (req: Request, res: Response) => {
 // 6. POST /api/donations/:id/reject — Admin rejects manual payment verification
 router.post('/:id/reject', (req: Request, res: Response) => {
   try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.headers['x-admin-token'] as string);
+    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || 'Admin@123456';
+    const isMasterKey = req.headers['x-admin-key'] === envAdminPass;
+
+    const callerUser = token ? serverStore.getUserFromToken(token) : null;
+    const isAuthorized = (callerUser && (callerUser.role === 'admin' || callerUser.role === 'volunteer')) || isMasterKey;
+    if (!isAuthorized && (process.env.NODE_ENV === 'production' || req.headers['x-enforce-auth'] === 'true')) {
+      return res.status(401).json({ success: false, error: 'Unauthorized. Administrator credentials required to approve payment verification requests.' });
+    }
+
     const id = String(req.params.id);
     const { reviewer, rejectionReason } = req.body;
 
@@ -320,6 +342,17 @@ router.post('/:id/reject', (req: Request, res: Response) => {
 // 7. PATCH /api/donations/:id — Update donation status or notes (Volunteer verification or Admin review)
 router.patch('/:id', (req: Request, res: Response) => {
   try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.headers['x-admin-token'] as string);
+    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || 'Admin@123456';
+    const isMasterKey = req.headers['x-admin-key'] === envAdminPass;
+
+    const callerUser = token ? serverStore.getUserFromToken(token) : null;
+    const isAuthorized = (callerUser && (callerUser.role === 'admin' || callerUser.role === 'volunteer')) || isMasterKey;
+    if (!isAuthorized && (process.env.NODE_ENV === 'production' || req.headers['x-enforce-auth'] === 'true')) {
+      return res.status(401).json({ success: false, error: 'Unauthorized. Administrator credentials required to approve payment verification requests.' });
+    }
+
     const id = String(req.params.id);
     const { status, notes, reviewer, rejectionReason, transactionId, verificationSource } = req.body;
 

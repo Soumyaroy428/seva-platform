@@ -39,9 +39,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(parsedUser);
 
           // Fetch fresh status from backend (especially volunteer approval status)
-          if (parsedUser.email) {
+          const token = parsedUser.token || localStorage.getItem('seva_token');
+          if (token) {
             try {
-              const res = await fetch(`/api/auth/me?email=${encodeURIComponent(parsedUser.email)}`);
+              const res = await fetch('/api/auth/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
               const data = await res.json();
               if (data.success && data.user) {
                 setUser(data.user);
@@ -179,9 +182,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshUser = async () => {
-    if (!user?.email) return;
+    const token = user?.token || localStorage.getItem('seva_token');
+    if (!token) return;
     try {
-      const res = await fetch(`/api/auth/me?email=${encodeURIComponent(user.email)}`);
+      const res = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await res.json();
       if (data.success && data.user) {
         setUser(data.user);
