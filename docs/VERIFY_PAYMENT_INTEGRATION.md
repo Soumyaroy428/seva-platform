@@ -98,7 +98,8 @@ curl -X POST http://localhost:5000/api/payments/create-session \
   "currency": "INR",
   "status": "PENDING",
   "checkoutUrl": "http://localhost:7000/pay/youpi_xxxxxxxx",
-  "upiIntent": "upi://pay?pa=seva.humanitarian%40upi&pn=SEVA%20Humanitarian%20Hunger%20Relief&am=100.00&cu=INR&tr=SEVA-ORD-...&tn=Donation%20SEVA-ORD-...",
+  "upiIntent": "upi://pay?pa=6295804018%40jio&pn=Soumya%20Roy&am=100.00&cu=INR&tr=SEVA-ORD-...&tn=Donation%20SEVA-ORD-...",
+  "qrImageUrl": "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=...",
   "donationId": "SEVA-DON-2026-xxxxxx"
 }
 ```

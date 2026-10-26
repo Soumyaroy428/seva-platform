@@ -125,7 +125,7 @@ Content-Type: application/json
   "currency": "INR",
   "status": "PENDING",
   "checkoutUrl": "http://localhost:7000/checkout/youpi_c7942127-14e3-469a-9e4a-9359a16f903a",
-  "upiIntent": "upi://pay?pa=seva.humanitarian%40upi&pn=SEVA%20Humanitarian%20Hunger%20Relief&am=250.00&cu=INR&tr=SEVA-ORD-1729440000-4821&tn=Donation%20SEVA-ORD-1729440000-4821",
+  "upiIntent": "upi://pay?pa=6295804018%40jio&pn=Soumya%20Roy&am=250.00&cu=INR&tr=SEVA-ORD-1729440000-4821&tn=Donation%20SEVA-ORD-1729440000-4821",
   "donationId": "SEVA-DON-2026-891042"
 }
 ```
