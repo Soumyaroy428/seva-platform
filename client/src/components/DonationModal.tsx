@@ -43,6 +43,9 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     checkoutUrl: string;
     upiIntent: string;
     amount: string;
+    upiPayeeAddress?: string;
+    upiPayeeName?: string;
+    qrImageUrl?: string;
     donationId?: string;
   } | null>(null);
 
@@ -114,10 +117,58 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     }
   };
 
+  const getActiveUPIId = () => {
+    if (session?.upiPayeeAddress) return session.upiPayeeAddress;
+    if (session?.upiIntent) {
+      const match = session.upiIntent.match(/[?&]pa=([^&]+)/);
+      if (match && match[1]) return decodeURIComponent(match[1]);
+    }
+    return process.env.NEXT_PUBLIC_PAYMENT_UPI_ID || '6295804018@jio';
+  };
+
+  const getActivePayeeName = () => {
+    if (session?.upiPayeeName) return session.upiPayeeName;
+    if (session?.upiIntent) {
+      const match = session.upiIntent.match(/[?&]pn=([^&]+)/);
+      if (match && match[1]) return decodeURIComponent(match[1]);
+    }
+    return process.env.NEXT_PUBLIC_PAYMENT_PAYEE_NAME || 'Soumya Roy';
+  };
+
+  const fallbackCopyText = (val: string) => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = val;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiedUPI(true);
+      setTimeout(() => setCopiedUPI(false), 2500);
+    } catch (e) {
+      console.warn('Fallback copy failed:', e);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedUPI(true);
-    setTimeout(() => setCopiedUPI(false), 2000);
+    const valueToCopy = text || getActiveUPIId();
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(valueToCopy).then(() => {
+          setCopiedUPI(true);
+          setTimeout(() => setCopiedUPI(false), 2500);
+        }).catch(() => {
+          fallbackCopyText(valueToCopy);
+        });
+      } else {
+        fallbackCopyText(valueToCopy);
+      }
+    } catch {
+      fallbackCopyText(valueToCopy);
+    }
   };
 
   const validateInputs = () => {
@@ -189,6 +240,9 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
         checkoutUrl: data.checkoutUrl,
         upiIntent: data.upiIntent,
         amount: data.amount,
+        upiPayeeAddress: data.upiPayeeAddress || '6295804018@jio',
+        upiPayeeName: data.upiPayeeName || 'Soumya Roy',
+        qrImageUrl: data.qrImageUrl,
         donationId: data.donationId
       });
     } catch (err: any) {
@@ -486,6 +540,12 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                       Scan with any UPI App or tap below on mobile:
                     </p>
 
+                    <div className="p-2.5 bg-slate-100/90 rounded-xl border border-slate-200 text-center max-w-sm mx-auto">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Verified Official UPI Payee:</span>
+                      <span className="font-mono font-bold text-sm text-slate-900 tracking-tight">{getActiveUPIId()}</span>
+                      <span className="text-xs text-slate-600 block">({getActivePayeeName()})</span>
+                    </div>
+
                     <div className="flex flex-col sm:flex-row gap-2 justify-center">
                       <a
                         href={session.upiIntent}
@@ -501,16 +561,12 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                       </a>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard((session as any)?.upiPayeeAddress || process.env.NEXT_PUBLIC_PAYMENT_UPI_ID || '6295804018@jio')}
-                        className="py-2.5 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all"
+                        onClick={() => copyToClipboard(getActiveUPIId())}
+                        className="py-2.5 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
                       >
-                        {copiedUPI ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                        <span>{copiedUPI ? 'UPI ID Copied' : 'Copy UPI ID'}</span>
+                        {copiedUPI ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-600" />}
+                        <span>{copiedUPI ? `Copied: ${getActiveUPIId()}` : `Copy UPI ID (${getActiveUPIId()})`}</span>
                       </button>
-                    </div>
-
-                    <div className="text-[11px] font-mono text-slate-600 bg-slate-100/90 py-1.5 px-3 rounded-lg border border-slate-200 inline-block">
-                      Verified Payee: <span className="font-bold text-slate-800">{(session as any)?.upiPayeeAddress || process.env.NEXT_PUBLIC_PAYMENT_UPI_ID || '6295804018@jio'}</span> ({(session as any)?.upiPayeeName || process.env.NEXT_PUBLIC_PAYMENT_PAYEE_NAME || 'Soumya Roy'})
                     </div>
 
                     <div className="pt-2 border-t border-slate-200/80 text-xs text-slate-500 flex items-center justify-center gap-1.5">
@@ -545,7 +601,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                           <span className="font-mono font-bold text-slate-700">{selectedQR.upiId}</span>
                           <button
                             type="button"
-                            onClick={() => copyToClipboard(selectedQR.upiId)}
+                            onClick={() => copyToClipboard(selectedQR.upiId || '6295804018@jio')}
                             className="p-1 rounded hover:bg-slate-100 text-slate-500"
                             title="Copy UPI ID"
                           >
