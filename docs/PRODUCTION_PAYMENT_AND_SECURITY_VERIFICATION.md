@@ -132,3 +132,4 @@ MONGODB_URI=mongodb+srv://Soumya_2026:Sroy%40123@cluster0.7q4i6rp.mongodb.net/se
 DATABASE_URL=mongodb+srv://Soumya_2026:Sroy%40123@cluster0.7q4i6rp.mongodb.net/seva?retryWrites=true&w=majority
 BACKEND_URL=http://localhost:5000
 ```
+
