@@ -2,6 +2,9 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Disable command buffering so disconnected operations fail instantly to the embedded store
+mongoose.set('bufferCommands', false);
+
 export async function connectDB() {
   const uri = process.env.MONGODB_URI || process.env.DATABASE_URL;
   if (!uri) {

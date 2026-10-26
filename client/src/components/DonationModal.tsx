@@ -489,19 +489,28 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                     <div className="flex flex-col sm:flex-row gap-2 justify-center">
                       <a
                         href={session.upiIntent}
-                        className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                        onClick={() => {
+                          if (typeof window !== 'undefined' && session?.upiIntent) {
+                            window.location.href = session.upiIntent;
+                          }
+                        }}
+                        className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
                       >
                         <Smartphone className="w-4 h-4" />
                         <span>Open Installed UPI App</span>
                       </a>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard('seva.humanitarian@upi')}
+                        onClick={() => copyToClipboard((session as any)?.upiPayeeAddress || process.env.NEXT_PUBLIC_PAYMENT_UPI_ID || '6295804018@jio')}
                         className="py-2.5 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all"
                       >
                         {copiedUPI ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                         <span>{copiedUPI ? 'UPI ID Copied' : 'Copy UPI ID'}</span>
                       </button>
+                    </div>
+
+                    <div className="text-[11px] font-mono text-slate-600 bg-slate-100/90 py-1.5 px-3 rounded-lg border border-slate-200 inline-block">
+                      Verified Payee: <span className="font-bold text-slate-800">{(session as any)?.upiPayeeAddress || process.env.NEXT_PUBLIC_PAYMENT_UPI_ID || '6295804018@jio'}</span> ({(session as any)?.upiPayeeName || process.env.NEXT_PUBLIC_PAYMENT_PAYEE_NAME || 'Soumya Roy'})
                     </div>
 
                     <div className="pt-2 border-t border-slate-200/80 text-xs text-slate-500 flex items-center justify-center gap-1.5">

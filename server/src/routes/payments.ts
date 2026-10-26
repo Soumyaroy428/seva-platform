@@ -77,10 +77,11 @@ router.post('/create-session', async (req: Request, res: Response) => {
       // Gracefully falls back to sovereign direct intent if local gateway daemon is paused
     }
 
-    // Dynamic UPI Intent string (compatible with Google Pay, PhonePe, Paytm, BHIM, CRED)
-    const upiPayeeAddress = 'seva.humanitarian@upi';
-    const upiPayeeName = 'SEVA Humanitarian Hunger Relief';
+    // Verified Production UPI Intent (Environment-driven, NPCI-standard deep link)
+    const upiPayeeAddress = (process.env.PAYMENT_UPI_ID || process.env.RECEIVING_UPI_ID || '6295804018@jio').trim();
+    const upiPayeeName = (process.env.PAYMENT_PAYEE_NAME || 'Soumya Roy').trim();
     const dynamicUpiIntent = `upi://pay?pa=${encodeURIComponent(upiPayeeAddress)}&pn=${encodeURIComponent(upiPayeeName)}&am=${amountFormatted}&cu=INR&tr=${orderId}&tn=${encodeURIComponent(`Donation ${orderId}`)}`;
+    const dynamicQrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(dynamicUpiIntent)}`;
 
     const resolvedPaymentId = gatewaySession?.paymentId || paymentId;
     const checkoutUrl = gatewaySession?.checkoutUrl || `${checkoutBaseUrl}/checkout/${resolvedPaymentId}`;
@@ -114,6 +115,9 @@ router.post('/create-session', async (req: Request, res: Response) => {
       status: 'PENDING',
       checkoutUrl,
       upiIntent: dynamicUpiIntent,
+      qrImageUrl: dynamicQrImageUrl,
+      upiPayeeAddress,
+      upiPayeeName,
       donationId: donation.donationId,
       donation
     });

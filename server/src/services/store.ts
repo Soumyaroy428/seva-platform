@@ -16,6 +16,8 @@ import {
   DistributionEventModel
 } from '../models';
 
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { sendOtpEmail, sendDonationReceiptEmail, sendVolunteerStatusEmail, sendSmsNotification, sendDonationRejectedNotification } from './email';
 
 export interface IRightHeroCard {
@@ -171,6 +173,8 @@ export interface IUser {
   availability?: string;
   avatar?: string;
   token?: string;
+  tokenCreatedAt?: string;
+  tokenExpiresAt?: number;
   createdAt: string;
 }
 
@@ -378,10 +382,10 @@ class SevaServerStore {
       id: 'qr-1',
       qrId: 'QR-SEVA-MAIN',
       title: 'Official Seva Relief Trust Account',
-      upiId: 'seva.relief@upi',
-      accountName: 'Seva Social Welfare Trust',
+      upiId: process.env.PAYMENT_UPI_ID || '6295804018@jio',
+      accountName: process.env.PAYMENT_PAYEE_NAME || 'Soumya Roy',
       location: 'Central Headquarters',
-      qrImageUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=seva.relief@upi%26pn=Seva+Trust%26cu=INR',
+      qrImageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`upi://pay?pa=${process.env.PAYMENT_UPI_ID || '6295804018@jio'}&pn=${encodeURIComponent(process.env.PAYMENT_PAYEE_NAME || 'Soumya Roy')}&cu=INR`)}`,
       uploadedBy: 'Admin (System)',
       status: 'Active',
       createdAt: '2026-08-01T00:00:00Z'
@@ -389,11 +393,11 @@ class SevaServerStore {
     {
       id: 'qr-2',
       qrId: 'QR-FLOOD-DISPATCH',
-      title: 'Flood Kitchen Mobile Van #3',
-      upiId: 'seva.emergency@upi',
-      accountName: 'Seva Emergency Operations',
+      title: 'Emergency Relief Community Kitchen',
+      upiId: process.env.PAYMENT_UPI_ID || '6295804018@jio',
+      accountName: process.env.PAYMENT_PAYEE_NAME || 'Soumya Roy',
       location: 'Riverbank Relief Base Camp',
-      qrImageUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=seva.emergency@upi%26pn=Seva+Emergency%26cu=INR',
+      qrImageUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`upi://pay?pa=${process.env.PAYMENT_UPI_ID || '6295804018@jio'}&pn=${encodeURIComponent(process.env.PAYMENT_PAYEE_NAME || 'Soumya Roy')}&cu=INR`)}`,
       uploadedBy: 'Aarav Patel (Coordinator)',
       status: 'Active',
       createdAt: '2026-08-22T08:00:00Z'
@@ -697,7 +701,7 @@ class SevaServerStore {
     }
   ];
 
-  private otps: Map<string, { identifier: string; code: string; expiresAt: number; intent: 'login' | 'register'; registerData?: any }> = new Map();
+  private otps: Map<string, { identifier: string; code: string; expiresAt: number; intent: 'login' | 'register'; registerData?: any; attempts?: number }> = new Map();
 
   // Accessors
   getCampaigns() { return this.campaigns; }
@@ -932,8 +936,27 @@ class SevaServerStore {
     return newDonation;
   }
 
-  getPaymentQRs() { return this.paymentQRs; }
-  getActivePaymentQRs() { return this.paymentQRs.filter(q => q.status === 'Active'); }
+  syncEnvPaymentQRs() {
+    const envUpi = (process.env.PAYMENT_UPI_ID || process.env.RECEIVING_UPI_ID || '6295804018@jio').trim();
+    const envPayee = (process.env.PAYMENT_PAYEE_NAME || 'Soumya Roy').trim();
+    for (const qr of this.paymentQRs) {
+      if (qr.id === 'qr-1' || qr.id === 'qr-2' || (qr.upiId && qr.upiId.includes('@upi'))) {
+        qr.upiId = envUpi;
+        qr.accountName = envPayee;
+        const uri = `upi://pay?pa=${encodeURIComponent(envUpi)}&pn=${encodeURIComponent(envPayee)}&cu=INR`;
+        qr.qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(uri)}`;
+      }
+    }
+  }
+
+  getPaymentQRs() {
+    this.syncEnvPaymentQRs();
+    return this.paymentQRs;
+  }
+  getActivePaymentQRs() {
+    this.syncEnvPaymentQRs();
+    return this.paymentQRs.filter(q => q.status === 'Active');
+  }
   addPaymentQR(data: any) {
     const newQR: IPaymentQR = {
       ...data,
@@ -2140,7 +2163,12 @@ class SevaServerStore {
     }
 
     if (entry.code !== (inputCode || '').trim()) {
-      throw new Error('Incorrect verification code. Please check and try again.');
+      entry.attempts = (entry.attempts || 0) + 1;
+      if (entry.attempts >= 5) {
+        this.otps.delete(key);
+        throw new Error('Maximum verification attempts exceeded (5/5). Code invalidated for security. Please request a new OTP.');
+      }
+      throw new Error(`Incorrect verification code. ${5 - entry.attempts} attempt(s) remaining.`);
     }
 
     // OTP matched! Remove to prevent reuse
@@ -2160,7 +2188,7 @@ class SevaServerStore {
         }
       }
 
-      user.token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      this.generateSecureSessionToken(user);
       const { password, ...safeUser } = user;
       this.logAudit(user.email || user.phone || 'OTP_User', 'OTP_LOGIN', 'User', `Logged in via ${type} OTP verification as ${user.role}`);
       return safeUser;
@@ -2225,7 +2253,7 @@ class SevaServerStore {
       id: `usr-${Date.now()}`,
       name: data.name,
       email: data.email,
-      password: data.password,
+      password: bcrypt.hashSync(data.password, 10),
       role: data.role,
       phone: data.phone || '',
       area: data.area || '',
@@ -2233,7 +2261,9 @@ class SevaServerStore {
       availability: data.availability || 'Weekends',
       volunteerStatus: data.role === 'volunteer' ? 'Pending' : undefined,
       volunteerId,
-      token: `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      token: crypto.randomBytes(32).toString('hex'),
+      tokenCreatedAt: new Date().toISOString(),
+      tokenExpiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       createdAt: new Date().toISOString()
     };
 
@@ -2401,7 +2431,7 @@ class SevaServerStore {
         admin.role = 'admin';
         admin.password = envAdminPass;
       }
-      admin.token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      this.generateSecureSessionToken(admin);
       const { password, ...safeUser } = admin;
       this.logAudit(admin.email, 'USER_LOGIN', 'User', 'Logged in as Chief Administrator (CMS via Env)');
       return safeUser;
@@ -2448,7 +2478,7 @@ class SevaServerStore {
           volRoster.status = 'Approved';
         }
 
-        vol.token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        this.generateSecureSessionToken(vol);
         const { password, ...safeUser } = vol;
         this.logAudit(vol.email, 'USER_LOGIN', 'User', `Logged in as Field Volunteer Slot ${i} (CMS via Env)`);
         return safeUser;
@@ -2463,7 +2493,23 @@ class SevaServerStore {
       user = this.users.find(u => u.phone && u.phone.replace(/\D/g, '').endsWith(norm.key));
     }
     
-    if (!user || user.password !== pass) {
+    if (!user) {
+      throw new Error('Invalid email, mobile number, or password.');
+    }
+
+    const isBcrypt = typeof user.password === 'string' && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$'));
+    let isPasswordValid = false;
+    if (isBcrypt) {
+      isPasswordValid = bcrypt.compareSync(pass, user.password);
+    } else {
+      isPasswordValid = user.password === pass;
+      if (isPasswordValid) {
+        user.password = bcrypt.hashSync(pass, 10);
+        UserModel.findOneAndUpdate({ email: user.email }, { password: user.password }).exec().catch(() => null);
+      }
+    }
+
+    if (!isPasswordValid) {
       throw new Error('Invalid email, mobile number, or password.');
     }
 
@@ -2475,15 +2521,43 @@ class SevaServerStore {
       }
     }
 
-    user.token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    this.generateSecureSessionToken(user);
     const { password, ...safeUser } = user;
     this.logAudit(user.email, 'USER_LOGIN', 'User', `Logged in as ${user.role} (Volunteer Status: ${user.volunteerStatus || 'N/A'})`);
     return safeUser;
   }
 
+  generateSecureSessionToken(user: IUser): string {
+    const token = crypto.randomBytes(32).toString('hex');
+    user.token = token;
+    user.tokenCreatedAt = new Date().toISOString();
+    user.tokenExpiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days TTL
+    return token;
+  }
+
+  invalidateToken(token: string): boolean {
+    if (!token) return false;
+    const user = this.users.find(u => u.token === token);
+    if (user) {
+      delete user.token;
+      delete user.tokenCreatedAt;
+      delete user.tokenExpiresAt;
+      return true;
+    }
+    return false;
+  }
+
   getUserFromToken(token: string) {
+    if (!token) return null;
     const user = this.users.find(u => u.token === token);
     if (!user) return null;
+
+    if (user.tokenExpiresAt && Date.now() > user.tokenExpiresAt) {
+      delete user.token;
+      delete user.tokenCreatedAt;
+      delete user.tokenExpiresAt;
+      return null;
+    }
 
     if (user.role === 'volunteer') {
       const vol = this.volunteers.find(v => v.email.toLowerCase() === user.email.toLowerCase() || (user.volunteerId && v.volunteerId === user.volunteerId));

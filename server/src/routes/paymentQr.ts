@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { serverStore } from '../services/store';
+import { requireAdmin, requireStaff, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -9,7 +10,7 @@ router.get('/', (req: Request, res: Response) => {
   res.json({ success: true, data: qrs });
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireStaff, (req: AuthenticatedRequest, res: Response) => {
   try {
     const { title, upiId, accountName, location, qrImageUrl, uploadedBy } = req.body;
     if (!title || !upiId || !accountName || !qrImageUrl) {
@@ -33,7 +34,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.patch('/', (req: Request, res: Response) => {
+router.patch('/', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   try {
     const { qrId, action, reviewer } = req.body;
     if (action === 'approve') {

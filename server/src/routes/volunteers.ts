@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { serverStore } from '../services/store';
+import { requireAdmin, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -31,7 +32,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.patch('/', (req: Request, res: Response) => {
+router.patch('/', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   try {
     const { volunteerId, status, reviewer } = req.body;
     const ok = serverStore.updateVolunteerStatus(volunteerId, status, reviewer || 'Admin');
@@ -42,7 +43,7 @@ router.patch('/', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   try {
     const ok = serverStore.deleteVolunteer(req.params.id as string);
     if (!ok) return res.status(404).json({ success: false, error: 'Volunteer not found.' });

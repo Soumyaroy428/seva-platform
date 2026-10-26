@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { serverStore } from '../services/store';
+import { requireAdmin, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/dashboard', (req: Request, res: Response) => {
+router.get('/dashboard', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   const stats = serverStore.getGlobalStats();
   const qrs = serverStore.getPaymentQRs();
   const pendingQRs = qrs.filter(q => q.status === 'Pending').length;
@@ -24,7 +25,7 @@ router.get('/dashboard', (req: Request, res: Response) => {
   });
 });
 
-router.get('/audit-logs', (req: Request, res: Response) => {
+router.get('/audit-logs', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   res.json({ success: true, data: serverStore.getAuditLogs() });
 });
 
@@ -37,7 +38,7 @@ router.get('/settings', (req: Request, res: Response) => {
 });
 
 // Update platform settings and impact counters (Admin control)
-router.post('/settings', (req: Request, res: Response) => {
+router.post('/settings', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   try {
     const {
       siteTitle,

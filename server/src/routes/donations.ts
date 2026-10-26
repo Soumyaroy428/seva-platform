@@ -245,7 +245,7 @@ router.post('/:id/approve', (req: Request, res: Response) => {
 
     const callerUser = token ? serverStore.getUserFromToken(token) : null;
     const isAuthorized = (callerUser && (callerUser.role === 'admin' || callerUser.role === 'volunteer')) || isMasterKey;
-    if (!isAuthorized && (process.env.NODE_ENV === 'production' || req.headers['x-enforce-auth'] === 'true')) {
+    if (!isAuthorized) {
       return res.status(401).json({ success: false, error: 'Unauthorized. Administrator credentials required to approve payment verification requests.' });
     }
 
@@ -293,7 +293,7 @@ router.post('/:id/reject', (req: Request, res: Response) => {
 
     const callerUser = token ? serverStore.getUserFromToken(token) : null;
     const isAuthorized = (callerUser && (callerUser.role === 'admin' || callerUser.role === 'volunteer')) || isMasterKey;
-    if (!isAuthorized && (process.env.NODE_ENV === 'production' || req.headers['x-enforce-auth'] === 'true')) {
+    if (!isAuthorized) {
       return res.status(401).json({ success: false, error: 'Unauthorized. Administrator credentials required to approve payment verification requests.' });
     }
 
@@ -349,7 +349,7 @@ router.patch('/:id', (req: Request, res: Response) => {
 
     const callerUser = token ? serverStore.getUserFromToken(token) : null;
     const isAuthorized = (callerUser && (callerUser.role === 'admin' || callerUser.role === 'volunteer')) || isMasterKey;
-    if (!isAuthorized && (process.env.NODE_ENV === 'production' || req.headers['x-enforce-auth'] === 'true')) {
+    if (!isAuthorized) {
       return res.status(401).json({ success: false, error: 'Unauthorized. Administrator credentials required to approve payment verification requests.' });
     }
 
