@@ -15,6 +15,10 @@ const UserSchema = new Schema({
   availability: { type: String },
   avatar: { type: String },
   token: { type: String },
+  tokenExpiresAt: { type: Number },
+  tokenCreatedAt: { type: String },
+  failedLoginAttempts: { type: Number, default: 0 },
+  lockUntil: { type: Number },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 

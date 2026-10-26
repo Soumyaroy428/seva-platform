@@ -37,7 +37,6 @@ function LoginContent() {
   // OTP Flow States
   const [step, setStep] = useState<'input' | 'otp'>('input');
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
-  const [activeOtpPreview, setActiveOtpPreview] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number>(0);
 
   // Form Fields
@@ -173,7 +172,6 @@ function LoginContent() {
     if (res.success) {
       setStep('otp');
       setCountdown(30);
-      setActiveOtpPreview(res.otpPreview || null);
       setSuccessMessage(res.message || `Verification code sent to ${id}`);
       setTimeout(() => {
         inputRefs.current[0]?.focus();
@@ -181,12 +179,6 @@ function LoginContent() {
     } else {
       setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Failed to send OTP code.');
     }
-  };
-
-  const handleAutoFillOtp = (code: string) => {
-    const chars = code.split('').slice(0, 6);
-    setOtpDigits(chars);
-    inputRefs.current[5]?.focus();
   };
 
   const handleOtpDigitChange = (index: number, value: string) => {
@@ -556,24 +548,10 @@ function LoginContent() {
                   </p>
                 </div>
 
-                {activeOtpPreview && (
-                  <div className="p-3 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-500 uppercase font-bold block">Verification Code:</span>
-                      <span className="font-mono text-base font-black text-orange-600 tracking-wider">
-                        {activeOtpPreview}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAutoFillOtp(activeOtpPreview)}
-                      className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg text-xs flex items-center gap-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Auto-Fill</span>
-                    </button>
-                  </div>
-                )}
+                <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl flex items-center gap-2.5 text-xs text-emerald-900">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>A secure 6-digit one-time code has been dispatched. Enter it below to verify.</span>
+                </div>
 
                 <div className="flex justify-center items-center gap-2 py-2">
                   {otpDigits.map((digit, idx) => (

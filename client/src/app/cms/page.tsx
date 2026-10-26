@@ -25,7 +25,7 @@ function CMSLoginContent() {
   const requestedRole = searchParams.get('role'); // 'admin' | 'volunteer' | null
   const redirectUrl = searchParams.get('redirect');
 
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -112,6 +112,7 @@ function CMSLoginContent() {
       } else {
         // Logged in as donor through CMS
         setError('This portal is restricted to Administrators and Field Volunteers. Please log in via the Donor Portal.');
+        logout();
       }
     } else {
       setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Invalid CMS credentials. Check your environment settings.');

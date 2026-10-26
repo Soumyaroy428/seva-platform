@@ -175,6 +175,8 @@ export interface IUser {
   token?: string;
   tokenCreatedAt?: string;
   tokenExpiresAt?: number;
+  failedLoginAttempts?: number;
+  lockUntil?: number;
   createdAt: string;
 }
 
@@ -2497,6 +2499,11 @@ class SevaServerStore {
       throw new Error('Invalid email, mobile number, or password.');
     }
 
+    if (user.lockUntil && Date.now() < user.lockUntil) {
+      const waitMinutes = Math.ceil((user.lockUntil - Date.now()) / 60000);
+      throw new Error(`Account temporarily locked due to excessive failed login attempts. Please try again in ${waitMinutes} minute(s).`);
+    }
+
     const isBcrypt = typeof user.password === 'string' && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$'));
     let isPasswordValid = false;
     if (isBcrypt) {
@@ -2510,8 +2517,18 @@ class SevaServerStore {
     }
 
     if (!isPasswordValid) {
-      throw new Error('Invalid email, mobile number, or password.');
+      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+      if (user.failedLoginAttempts >= 5) {
+        user.lockUntil = Date.now() + 15 * 60 * 1000;
+        user.failedLoginAttempts = 0;
+        this.logAudit(user.email, 'ACCOUNT_LOCKED', 'User', 'Locked account for 15 minutes after 5 consecutive failed login attempts.');
+        throw new Error('Account temporarily locked due to 5 consecutive failed login attempts. Please try again in 15 minutes.');
+      }
+      throw new Error(`Invalid email, mobile number, or password. ${5 - user.failedLoginAttempts} attempt(s) remaining before temporary account lockout.`);
     }
+
+    user.failedLoginAttempts = 0;
+    delete user.lockUntil;
 
     if (user.role === 'volunteer') {
       const vol = this.volunteers.find(v => v.email.toLowerCase() === user.email.toLowerCase() || (user.volunteerId && v.volunteerId === user.volunteerId));

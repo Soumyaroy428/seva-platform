@@ -49,6 +49,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (data.success && data.user) {
                 setUser(data.user);
                 localStorage.setItem('seva_user', JSON.stringify(data.user));
+              } else if (res.status === 401 || !data.success) {
+                // Session expired or invalidated on server — clear client state cleanly
+                setUser(null);
+                localStorage.removeItem('seva_user');
+                localStorage.removeItem('seva_token');
               }
             } catch (err) {
               console.warn('Silent refresh error:', err);
@@ -140,6 +145,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(data.user);
       localStorage.setItem('seva_user', JSON.stringify(data.user));
+      if (data.user?.token || data.token) {
+        localStorage.setItem('seva_token', data.user?.token || data.token);
+      }
       return { success: true, user: data.user };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Network error occurred.' };
@@ -169,16 +177,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(data.user);
       localStorage.setItem('seva_user', JSON.stringify(data.user));
+      if (data.user?.token || data.token) {
+        localStorage.setItem('seva_token', data.user?.token || data.token);
+      }
       return { success: true, message: data.message, user: data.user };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Network error during registration.' };
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const token = user?.token || (typeof window !== 'undefined' ? localStorage.getItem('seva_token') : null);
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        credentials: 'include'
+      }).catch(() => null);
+    } catch {}
+
     setUser(null);
-    localStorage.removeItem('seva_user');
-    localStorage.removeItem('seva_token');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('seva_user');
+      localStorage.removeItem('seva_token');
+    }
   };
 
   const refreshUser = async () => {
