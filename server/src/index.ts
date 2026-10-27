@@ -123,7 +123,6 @@ app.get(['/', '/api/health', '/api/db-status'], async (req, res) => {
 
   if (dbState === 0) {
     try {
-      isDbReady = false; // Force retry for debugging
       await initServer();
       dbState = mongoose.connection.readyState;
     } catch (err) {}
@@ -169,12 +168,16 @@ app.use('/api/payments', paymentsRouter);
 
 
 // Initialize DB and launch server
-let isDbReady = false;
+let isSynced = false;
 export async function initServer() {
-  if (!isDbReady) {
-    await connectDB();
-    await serverStore.syncWithMongoDB();
-    isDbReady = true;
+  const conn = await connectDB();
+  if (conn && mongoose.connection.readyState === 1 && !isSynced) {
+    try {
+      await serverStore.syncWithMongoDB();
+      isSynced = true;
+    } catch (err: any) {
+      console.warn('⚠️ syncWithMongoDB non-fatal error:', err.message);
+    }
   }
 }
 

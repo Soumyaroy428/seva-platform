@@ -569,6 +569,19 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                       </button>
                     </div>
 
+                    {/* NPCI & UPI App Helper Notice */}
+                    <div className="p-2.5 bg-blue-50/80 border border-blue-200/80 rounded-xl text-left text-[11px] text-blue-900 space-y-1">
+                      <div className="flex items-center gap-1 font-bold text-blue-950">
+                        <Info className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                        <span>Payment Guidance & Tips:</span>
+                      </div>
+                      <p className="text-blue-900/90 leading-relaxed text-[10.5px]">
+                        • <strong>On Mobile:</strong> Tap <em>&ldquo;Open Installed UPI App&rdquo;</em> to launch PhonePe/GPay directly with zero scan limits.<br />
+                        • <strong>Gallery Scans:</strong> If scanning saved QR from gallery, tap <em>Dismiss</em> on the NPCI notice, then tap the purple <em>&ldquo;Pay ₹{amount}&rdquo;</em> button to enter your UPI PIN.<br />
+                        • <strong>Testing Note:</strong> NPCI strictly blocks paying your own UPI ID from the same phone/account. Test using a family/friend account or secondary bank.
+                      </p>
+                    </div>
+
                     <div className="pt-2 border-t border-slate-200/80 text-xs text-slate-500 flex items-center justify-center gap-1.5">
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-600" />
                       <span>Waiting for bank confirmation (auto-reconciling)...</span>

@@ -80,7 +80,8 @@ router.post('/create-session', async (req: Request, res: Response) => {
     // Verified Production UPI Intent (Environment-driven, NPCI-standard deep link)
     const upiPayeeAddress = (process.env.PAYMENT_UPI_ID || process.env.RECEIVING_UPI_ID || '6295804018@jio').trim();
     const upiPayeeName = (process.env.PAYMENT_PAYEE_NAME || 'Soumya Roy').trim();
-    const dynamicUpiIntent = `upi://pay?pa=${encodeURIComponent(upiPayeeAddress)}&pn=${encodeURIComponent(upiPayeeName)}&am=${amountFormatted}&cu=INR&tr=${orderId}&tn=${encodeURIComponent(`Donation ${orderId}`)}`;
+    const upiTr = orderId.replace(/[^a-zA-Z0-9]/g, '');
+    const dynamicUpiIntent = `upi://pay?pa=${encodeURIComponent(upiPayeeAddress)}&pn=${encodeURIComponent(upiPayeeName)}&am=${amountFormatted}&cu=INR&tr=${encodeURIComponent(upiTr)}&tn=${encodeURIComponent(`Donation ${orderId}`)}`;
     const dynamicQrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(dynamicUpiIntent)}`;
 
     const resolvedPaymentId = gatewaySession?.paymentId || paymentId;
