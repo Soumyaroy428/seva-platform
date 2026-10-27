@@ -2061,17 +2061,18 @@ class SevaServerStore {
     const { type, key } = this.normalizeIdentifier(identifier);
     if (!key) return undefined;
 
-    const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
-    if (type === 'email' && key === envAdminEmail) {
+    const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const envAdminPass = (process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '').trim();
+    if (envAdminEmail && envAdminPass && type === 'email' && key === envAdminEmail) {
       let admin = this.users.find(u => u.email && u.email.trim().toLowerCase() === key);
       if (!admin) {
         admin = {
           id: 'admin_cms_master',
-          name: 'Chief Administrator (CMS)',
+          name: process.env.CMS_ADMIN_NAME || 'Chief Administrator (CMS)',
           email: envAdminEmail,
-          password: process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456',
+          password: envAdminPass,
           role: 'admin',
-          phone: '+91 9876543210',
+          phone: process.env.CMS_ADMIN_PHONE || '+91 9876543210',
           area: 'Central Command & CMS Operations',
           createdAt: new Date().toISOString()
         };
@@ -2506,36 +2507,40 @@ class SevaServerStore {
   }
 
   initEnvAccounts() {
-    // 1. CMS Administrator from environment
-    const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
-    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456';
-    let admin = this.users.find(u => u.email.toLowerCase() === envAdminEmail || u.role === 'admin');
-    if (!admin) {
-      admin = {
-        id: 'admin_cms_master',
-        name: 'Chief Administrator (CMS)',
-        email: envAdminEmail,
-        password: envAdminPass,
-        role: 'admin',
-        phone: '+91 9876543210',
-        area: 'Central Command & CMS Operations',
-        createdAt: new Date().toISOString()
-      };
-      this.users.unshift(admin);
-    } else {
-      admin.email = envAdminEmail;
-      admin.password = envAdminPass;
-      admin.role = 'admin';
+    // 1. CMS Administrator strictly from environment (only if configured in Vercel/process.env)
+    const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const envAdminPass = (process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '').trim();
+    if (envAdminEmail && envAdminPass) {
+      let admin = this.users.find(u => u.email.toLowerCase() === envAdminEmail || u.role === 'admin');
+      if (!admin) {
+        admin = {
+          id: 'admin_cms_master',
+          name: process.env.CMS_ADMIN_NAME || 'Chief Administrator (CMS)',
+          email: envAdminEmail,
+          password: envAdminPass,
+          role: 'admin',
+          phone: process.env.CMS_ADMIN_PHONE || '+91 9876543210',
+          area: 'Central Command & CMS Operations',
+          createdAt: new Date().toISOString()
+        };
+        this.users.unshift(admin);
+      } else {
+        admin.email = envAdminEmail;
+        admin.password = envAdminPass;
+        admin.role = 'admin';
+      }
     }
 
-    // 2. All 4 CMS Field Volunteers from environment
-    for (let i = 1; i <= 4; i++) {
-      const volEmail = (process.env[`CMS_VOLUNTEER_${i}_EMAIL`] || `volunteer${i}@seva.org`).trim().toLowerCase();
-      const volPass = process.env[`CMS_VOLUNTEER_${i}_PASSWORD`] || `Vol@2026_Slot${i}`;
+    // 2. CMS Field Volunteers strictly from environment (only if explicitly configured in Vercel/process.env)
+    for (let i = 1; i <= 10; i++) {
+      const volEmail = (process.env[`CMS_VOLUNTEER_${i}_EMAIL`] || '').trim().toLowerCase();
+      const volPass = (process.env[`CMS_VOLUNTEER_${i}_PASSWORD`] || '').trim();
+      if (!volEmail || !volPass) continue; // Skip if slot is not explicitly configured in environment
+
       const volName = process.env[`CMS_VOLUNTEER_${i}_NAME`] || `Field Volunteer ${i}`;
-      const volPhone = (process.env[`CMS_VOLUNTEER_${i}_PHONE`] || `+91 987654000${i}`).trim();
+      const volPhone = (process.env[`CMS_VOLUNTEER_${i}_PHONE`] || '').trim();
       const volArea = process.env[`CMS_VOLUNTEER_${i}_AREA`] || `Relief Zone ${i}`;
-      const volId = `SEVA-VOL-2026-000${i}`;
+      const volId = process.env[`CMS_VOLUNTEER_${i}_ID`] || `SEVA-VOL-2026-000${i}`;
 
       let volUser = this.users.find(u => (u.email && u.email.toLowerCase() === volEmail) || u.volunteerId === volId);
       if (!volUser) {
@@ -2591,20 +2596,20 @@ class SevaServerStore {
   async authenticateUser(identifier: string, pass: string) {
     this.initEnvAccounts();
     const norm = this.normalizeIdentifier(identifier);
-    const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
-    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456';
+    const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const envAdminPass = (process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '').trim();
 
-    // 1. Direct CMS Administrator authentication from Environment
-    if (norm.type === 'email' && norm.key.toLowerCase() === envAdminEmail && pass === envAdminPass) {
+    // 1. Direct CMS Administrator authentication strictly from Environment (Vercel)
+    if (envAdminEmail && envAdminPass && norm.type === 'email' && norm.key.toLowerCase() === envAdminEmail && pass === envAdminPass) {
       let admin = this.users.find(u => u.email.toLowerCase() === envAdminEmail || u.role === 'admin');
       if (!admin) {
         admin = {
           id: 'admin_cms_master',
-          name: 'Chief Administrator (CMS)',
+          name: process.env.CMS_ADMIN_NAME || 'Chief Administrator (CMS)',
           email: envAdminEmail,
           password: envAdminPass,
           role: 'admin',
-          phone: '+91 9876543210',
+          phone: process.env.CMS_ADMIN_PHONE || '+91 9876543210',
           area: 'Central Command & CMS Operations',
           createdAt: new Date().toISOString()
         };
@@ -2619,16 +2624,18 @@ class SevaServerStore {
       return safeUser;
     }
 
-    // 2. Direct CMS Field Volunteers authentication from Environment (4 Slots)
-    for (let i = 1; i <= 4; i++) {
-      const volEmail = (process.env[`CMS_VOLUNTEER_${i}_EMAIL`] || `volunteer${i}@seva.org`).trim().toLowerCase();
-      const volPass = process.env[`CMS_VOLUNTEER_${i}_PASSWORD`] || `Vol@2026_Slot${i}`;
-      const volPhone = (process.env[`CMS_VOLUNTEER_${i}_PHONE`] || `+91 987654000${i}`).trim();
-      const volId = `SEVA-VOL-2026-000${i}`;
+    // 2. Direct CMS Field Volunteers authentication strictly from Environment (Vercel)
+    for (let i = 1; i <= 10; i++) {
+      const volEmail = (process.env[`CMS_VOLUNTEER_${i}_EMAIL`] || '').trim().toLowerCase();
+      const volPass = (process.env[`CMS_VOLUNTEER_${i}_PASSWORD`] || '').trim();
+      if (!volEmail || !volPass) continue; // Skip if slot is not configured in environment
+
+      const volPhone = (process.env[`CMS_VOLUNTEER_${i}_PHONE`] || '').trim();
+      const volId = process.env[`CMS_VOLUNTEER_${i}_ID`] || `SEVA-VOL-2026-000${i}`;
 
       const matchesEmail = norm.type === 'email' && norm.key.toLowerCase() === volEmail;
       const cleanPhoneDigits = volPhone.replace(/\D/g, '');
-      const matchesPhone = norm.type === 'phone' && cleanPhoneDigits.endsWith(norm.key);
+      const matchesPhone = Boolean(volPhone && norm.type === 'phone' && cleanPhoneDigits.endsWith(norm.key));
 
       if ((matchesEmail || matchesPhone) && pass === volPass) {
         let vol = this.users.find(u => (u.email && u.email.toLowerCase() === volEmail) || u.volunteerId === volId);
@@ -2662,7 +2669,7 @@ class SevaServerStore {
 
         this.generateSecureSessionToken(vol);
         const { password, ...safeUser } = vol;
-        this.logAudit(vol.email, 'USER_LOGIN', 'User', `Logged in as Field Volunteer Slot ${i} (CMS via Env)`);
+        this.logAudit(vol.email, 'USER_LOGIN', 'User', `Logged in as Field Volunteer (CMS via Env Slot ${i})`);
         return safeUser;
       }
     }
@@ -2870,34 +2877,50 @@ class SevaServerStore {
         createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : new Date().toISOString()
       }));
 
-      // Ensure CMS Administrator from environment is active and synchronized
-      const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva.org').trim().toLowerCase();
-      const envAdminPass = process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456';
+      // Ensure CMS Administrator from environment is active and synchronized (strictly if configured in Vercel)
+      const envAdminEmail = (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+      const envAdminPass = (process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '').trim();
       
-      let adminUser = this.users.find(u => u.email.toLowerCase() === envAdminEmail || u.role === 'admin');
-      if (!adminUser) {
-        adminUser = {
-          id: `usr-admin-${Date.now()}`,
-          name: 'Chief Administrator (CMS)',
-          email: envAdminEmail,
-          password: envAdminPass,
-          role: 'admin',
-          phone: '+91 9876543210',
-          area: 'Central Operations Hub',
-          createdAt: new Date().toISOString()
-        };
-        this.users.unshift(adminUser);
-        await UserModel.findOneAndUpdate(
-          { email: envAdminEmail },
-          adminUser,
-          { upsert: true, new: true }
-        ).catch((err: any) => console.warn('Could not persist CMS Admin to MongoDB:', err.message));
-        console.log(`✅ CMS Administrator initialized from env: ${envAdminEmail}`);
-      } else {
-        adminUser.email = envAdminEmail;
-        adminUser.password = envAdminPass;
-        adminUser.role = 'admin';
-        await UserModel.updateOne({ email: adminUser.email }, { $set: { password: envAdminPass, role: 'admin' } }).catch(() => {});
+      if (envAdminEmail && envAdminPass) {
+        let adminUser = this.users.find(u => u.email.toLowerCase() === envAdminEmail || u.role === 'admin');
+        if (!adminUser) {
+          adminUser = {
+            id: `usr-admin-${Date.now()}`,
+            name: process.env.CMS_ADMIN_NAME || 'Chief Administrator (CMS)',
+            email: envAdminEmail,
+            password: envAdminPass,
+            role: 'admin',
+            phone: process.env.CMS_ADMIN_PHONE || '+91 9876543210',
+            area: 'Central Operations Hub',
+            createdAt: new Date().toISOString()
+          };
+          this.users.unshift(adminUser);
+          await UserModel.findOneAndUpdate(
+            { email: envAdminEmail },
+            adminUser,
+            { upsert: true, new: true }
+          ).catch((err: any) => console.warn('Could not persist CMS Admin to MongoDB:', err.message));
+          console.log(`✅ CMS Administrator initialized from env: ${envAdminEmail}`);
+        } else {
+          adminUser.email = envAdminEmail;
+          adminUser.password = envAdminPass;
+          adminUser.role = 'admin';
+          await UserModel.updateOne({ email: adminUser.email }, { $set: { password: envAdminPass, role: 'admin' } }).catch(() => {});
+        }
+      }
+
+      // Purge any legacy test demo credentials from MongoDB Atlas and memory if not explicitly configured
+      const legacyDemoEmails = ['admin@seva.org', 'volunteer1@seva.org', 'volunteer2@seva.org', 'volunteer3@seva.org', 'volunteer4@seva.org'];
+      for (const dEmail of legacyDemoEmails) {
+        if (dEmail !== envAdminEmail) {
+          const isConfiguredInEnv = Array.from({ length: 10 }, (_, i) => (process.env[`CMS_VOLUNTEER_${i+1}_EMAIL`] || '').trim().toLowerCase()).includes(dEmail);
+          if (!isConfiguredInEnv) {
+            this.users = this.users.filter(u => u.email.toLowerCase() !== dEmail);
+            this.volunteers = this.volunteers.filter(v => v.email && v.email.toLowerCase() !== dEmail);
+            await UserModel.deleteMany({ email: dEmail }).catch(() => {});
+            await VolunteerModel.deleteMany({ email: dEmail }).catch(() => {});
+          }
+        }
       }
 
       // 2. Volunteers (Loaded dynamically from MongoDB Atlas, zero demo volunteers)

@@ -671,3 +671,4 @@ export default function MonthlyDonationEmailSection({
     </div>
   );
 }
+

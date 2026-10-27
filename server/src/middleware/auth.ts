@@ -17,15 +17,15 @@ export async function authenticateToken(req: AuthenticatedRequest, res: Response
 
   const token = bearerToken || cookieToken || headerToken || queryToken;
 
-  // Master Environment Passkey (for automated ops/scripts)
-  const envAdminPass = process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Admin@123456';
-  const isMasterKey = req.headers['x-admin-key'] === envAdminPass || req.body?.adminKey === envAdminPass;
+  // Master Environment Passkey (strictly if configured in Vercel/process.env)
+  const envAdminPass = (process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '').trim();
+  const isMasterKey = Boolean(envAdminPass && (req.headers['x-admin-key'] === envAdminPass || req.body?.adminKey === envAdminPass));
 
   if (isMasterKey) {
     req.user = {
       id: 'admin_cms_master',
-      name: 'Chief Administrator (System Key)',
-      email: process.env.CMS_ADMIN_EMAIL || 'admin@seva.org',
+      name: process.env.CMS_ADMIN_NAME || 'Chief Administrator (System Key)',
+      email: (process.env.CMS_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@seva-foundation.internal').trim().toLowerCase(),
       role: 'admin'
     };
     return next();

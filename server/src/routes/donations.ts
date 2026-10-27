@@ -240,8 +240,8 @@ router.post('/:id/approve', (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.headers['x-admin-token'] as string);
-    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || 'Admin@123456';
-    const isMasterKey = req.headers['x-admin-key'] === envAdminPass;
+    const envAdminPass = (process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '').trim();
+    const isMasterKey = Boolean(envAdminPass && req.headers['x-admin-key'] === envAdminPass);
 
     const callerUser = token ? serverStore.getUserFromToken(token) : null;
     const isAuthorized = (callerUser && (callerUser.role === 'admin' || callerUser.role === 'volunteer')) || isMasterKey;
@@ -288,8 +288,8 @@ router.post('/:id/reject', (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.headers['x-admin-token'] as string);
-    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || 'Admin@123456';
-    const isMasterKey = req.headers['x-admin-key'] === envAdminPass;
+    const envAdminPass = (process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '').trim();
+    const isMasterKey = Boolean(envAdminPass && req.headers['x-admin-key'] === envAdminPass);
 
     const callerUser = token ? serverStore.getUserFromToken(token) : null;
     const isAuthorized = (callerUser && (callerUser.role === 'admin' || callerUser.role === 'volunteer')) || isMasterKey;
@@ -344,8 +344,8 @@ router.patch('/:id', (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.headers['x-admin-token'] as string);
-    const envAdminPass = process.env.CMS_ADMIN_PASSWORD || 'Admin@123456';
-    const isMasterKey = req.headers['x-admin-key'] === envAdminPass;
+    const envAdminPass = (process.env.CMS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '').trim();
+    const isMasterKey = Boolean(envAdminPass && req.headers['x-admin-key'] === envAdminPass);
 
     const callerUser = token ? serverStore.getUserFromToken(token) : null;
     const isAuthorized = (callerUser && (callerUser.role === 'admin' || callerUser.role === 'volunteer')) || isMasterKey;

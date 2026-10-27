@@ -608,20 +608,7 @@ function AdminDashboardContent() {
     }
   };
 
-  const handleLoadSampleCampaigns = async () => {
-    try {
-      const res = await fetch('/api/campaigns/load-sample', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        notify('Default sample campaigns restored! Section is now visible on the main website.');
-        fetchData();
-      } else {
-        alert(data.error || 'Failed to restore default sample campaigns');
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
 
   const handleToggleCampaignStatus = async (camp: ICampaign) => {
     const newStatus: ICampaign['status'] = camp.status === 'Active' ? 'Paused' : 'Active';
@@ -788,20 +775,7 @@ function AdminDashboardContent() {
     }
   };
 
-  const handleLoadSampleDistributions = async () => {
-    try {
-      const res = await fetch('/api/distributions/load-sample', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        notify('Default verified sample distributions restored! Section is now visible on the main website.');
-        fetchData();
-      } else {
-        alert(data.error || 'Failed to restore default sample distributions');
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
 
   // 4. How It Works CRUD
   const openNewHIWModal = () => {
@@ -1123,20 +1097,7 @@ function AdminDashboardContent() {
     }
   };
 
-  const handleLoadSampleStories = async () => {
-    try {
-      const res = await fetch('/api/stories/load-sample', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        notify('Default verified sample stories restored! Section is now visible on the main website.');
-        fetchData();
-      } else {
-        alert(data.error || 'Failed to restore default sample stories');
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+
 
   // 9. FAQ CRUD
   const openNewFAQModal = () => {
@@ -1290,17 +1251,7 @@ function AdminDashboardContent() {
     }
   };
 
-  const handleLoadDemoBaseline = () => {
-    setVerifiedMetrics(prev => ({
-      ...prev,
-      totalMealsServed: 125450,
-      totalPeopleHelped: 48205,
-      activeVolunteersCount: 840,
-      totalDistributionsCount: 313,
-      totalDonated: 0
-    }));
-    notify('Loaded demo verified baseline figures into inputs. Click "Save Verified Metrics" to publish.');
-  };
+
 
   // 11. Right Hero Visual Cards Handlers
   const handleSaveHeroCard = async (e: React.FormEvent) => {
@@ -1378,26 +1329,7 @@ function AdminDashboardContent() {
     }
   };
 
-  const handleLoadSampleHeroCard = () => {
-    setHeroTitle('450 Fresh Khichdi Meals Delivered at Lowland Shelter #3');
-    setHeroBadgeText('Live Field Dispatch');
-    setHeroTimeAgo('12 mins ago');
-    setHeroImageUrl('https://images.unsplash.com/photo-1593113598332-cd288d649433?q=80&w=800&auto=format&fit=crop');
-    setHeroRaisedAmount(184500);
-    setHeroGoalAmount(250000);
-    setHeroProgress(74);
-    setHeroAutoCalcProgress(true);
-    setHeroShowImpact(true);
-    setHeroImpactTag('Direct Impact');
-    setHeroImpactText('₹20 = 1 Nourishing Meal');
-    setHeroImpactIcon('✓');
-    setHeroShowVolunteers(true);
-    setHeroVolunteersTag('Volunteers');
-    setHeroVolunteersText('840+ Active on Field');
-    setHeroVolunteersIcon('★');
-    setHeroIsActive(true);
-    notify('Sample template loaded. Click "Save Right Hero Visual Cards" below to publish it live.');
-  };
+
 
 
   // Auth Guard
@@ -1932,7 +1864,7 @@ function AdminDashboardContent() {
                       {campaignSectionSettings?.isEnabled && campaigns.filter(c => c.status === 'Active').length > 0 ? `Live (${campaigns.filter(c => c.status === 'Active').length})` : 'Div Removed'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500">Master visibility, CRUD, sample load</p>
+                  <p className="text-[11px] text-slate-500">Master visibility and live management</p>
                 </button>
 
                 <button
@@ -2147,15 +2079,6 @@ function AdminDashboardContent() {
                   </span>
                 )}
 
-                <button
-                  type="button"
-                  onClick={handleLoadSampleCampaigns}
-                  className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all border border-slate-200 flex items-center gap-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-orange-600" />
-                  <span>Load Default Sample Campaigns</span>
-                </button>
-
                 {campaigns.length > 0 && (
                   <button
                     type="button"
@@ -2340,17 +2263,9 @@ function AdminDashboardContent() {
                   Zero Campaigns Configured — Div Removed From Main Website
                 </h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mb-6">
-                  Because the admin has not given any campaigns, the entire "Support an Active Campaign" div is completely removed from the homepage DOM. Click below to add campaigns or load the default sample missions.
+                  No active campaigns are currently configured. Click below to launch your first official campaign.
                 </p>
                 <div className="flex items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleLoadSampleCampaigns}
-                    className="px-4 py-2.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-sm transition-all"
-                  >
-                    <Sparkles className="w-4 h-4 text-orange-400" />
-                    <span>Load Default Sample Campaigns</span>
-                  </button>
                   <button
                     type="button"
                     onClick={openNewCampaignModal}
@@ -2520,15 +2435,6 @@ function AdminDashboardContent() {
                     <span>Hidden on Website ({!heroCard || !heroCard.title ? 'Nothing Written' : 'Disabled'})</span>
                   </span>
                 )}
-
-                <button
-                  type="button"
-                  onClick={handleLoadSampleHeroCard}
-                  className="px-3 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all border border-slate-200 flex items-center gap-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-orange-600" />
-                  <span>Fill Default Template</span>
-                </button>
 
                 {heroCard && (
                   <button
@@ -2892,15 +2798,8 @@ function AdminDashboardContent() {
                     </div>
                     <h4 className="text-sm font-black text-amber-950">No Data Written Yet</h4>
                     <p className="text-xs text-amber-800 max-w-xs mx-auto leading-relaxed">
-                      Right Hero Visual Cards is currently <strong>hidden</strong> from the website because no title has been written.
+                      Right Hero Visual Cards is currently <strong>hidden</strong> from the website until saved above.
                     </p>
-                    <button
-                      type="button"
-                      onClick={handleLoadSampleHeroCard}
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
-                    >
-                      Load Sample Template
-                    </button>
                   </div>
                 ) : (
                   <div className="relative p-6 rounded-3xl bg-gradient-to-b from-orange-50/60 to-amber-50/40 border border-orange-100 shadow-xl overflow-visible">
@@ -3431,16 +3330,6 @@ function AdminDashboardContent() {
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleLoadDemoBaseline}
-                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
-                  title="Load sample figures (1.25L Meals / 48K People)"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Load Sample Figures</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={handleResetVerifiedMetrics}
@@ -4162,12 +4051,6 @@ function AdminDashboardContent() {
                 {/* Quick reset/clear shortcuts */}
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleLoadSampleDistributions}
-                    className="text-[11px] font-semibold text-slate-600 hover:text-blue-700 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
-                  >
-                    Restore Sample Missions
-                  </button>
-                  <button
                     onClick={handleClearAllDistributions}
                     className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 px-2.5 py-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 transition-all"
                   >
@@ -4295,18 +4178,12 @@ function AdminDashboardContent() {
                   Per strict platform rule, because you have not written or logged any distributions,
                   the entire {"<section id=\"distributions\">"} container is <strong>completely removed from the main website</strong>.
                 </p>
-                <div className="flex items-center justify-center gap-3">
+                <div className="flex items-center justify-center">
                   <button
                     onClick={openNewDistributionModal}
                     className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
                   >
                     + Log First Distribution
-                  </button>
-                  <button
-                    onClick={handleLoadSampleDistributions}
-                    className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
-                  >
-                    Restore Sample Missions
                   </button>
                 </div>
               </div>
@@ -4630,12 +4507,6 @@ function AdminDashboardContent() {
                 {/* Quick reset/clear shortcuts */}
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleLoadSampleStories}
-                    className="text-[11px] font-semibold text-slate-600 hover:text-rose-700 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
-                  >
-                    Restore Sample Stories
-                  </button>
-                  <button
                     onClick={handleClearAllStories}
                     className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 px-2.5 py-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 transition-all"
                   >
@@ -4763,18 +4634,12 @@ function AdminDashboardContent() {
                   Per strict platform rule, because you have not written or published any stories,
                   the entire {"<section id=\"stories\">"} container is <strong>completely removed from the main website</strong>.
                 </p>
-                <div className="flex items-center justify-center gap-3">
+                <div className="flex items-center justify-center">
                   <button
                     onClick={openNewStoryModal}
                     className="py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
                   >
                     + Publish First Story
-                  </button>
-                  <button
-                    onClick={handleLoadSampleStories}
-                    className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
-                  >
-                    Restore Sample Stories
                   </button>
                 </div>
               </div>
@@ -4888,7 +4753,7 @@ function AdminDashboardContent() {
                   </div>
                 </div>
                 <p className="text-xs text-slate-600 pt-1">
-                  Active Admin: <strong className="text-slate-900">{user?.name || 'Primary Administrator'}</strong> ({user?.email || 'admin@seva.org'}) • Status: <span className="text-emerald-700 font-bold">Active & Authenticated</span>
+                  Active Admin: <strong className="text-slate-900">{user?.name || 'Primary Administrator'}</strong> ({user?.email || 'Configured via Environment'}) • Status: <span className="text-emerald-700 font-bold">Active & Authenticated</span>
                 </p>
               </div>
 

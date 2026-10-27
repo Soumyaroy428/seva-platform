@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import {
-  ShieldCheck,
-  UserCheck,
   Lock,
   Mail,
   ArrowRight,
@@ -14,15 +12,12 @@ import {
   AlertCircle,
   CheckCircle2,
   Sliders,
-  Sparkles,
-  KeyRound,
-  Check
+  KeyRound
 } from 'lucide-react';
 
 function CMSLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const requestedRole = searchParams.get('role'); // 'admin' | 'volunteer' | null
   const redirectUrl = searchParams.get('redirect');
 
   const { login, logout } = useAuth();
@@ -32,59 +27,6 @@ function CMSLoginContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-
-  // Default credentials configured via Environment (.env / .env.local)
-  const envAdminEmail = process.env.NEXT_PUBLIC_CMS_ADMIN_EMAIL || 'admin@seva.org';
-  const envAdminPass = process.env.NEXT_PUBLIC_CMS_ADMIN_PASSWORD || 'Admin@123456';
-
-  const envVolunteers = [
-    {
-      slot: 1,
-      name: 'Field Volunteer Slot 1',
-      zone: 'North Relief Slums',
-      email: process.env.NEXT_PUBLIC_CMS_VOLUNTEER_1_EMAIL || 'volunteer1@seva.org',
-      password: process.env.NEXT_PUBLIC_CMS_VOLUNTEER_1_PASSWORD || 'Vol@2026_Slot1'
-    },
-    {
-      slot: 2,
-      name: 'Field Volunteer Slot 2',
-      zone: 'South Kitchen Zone',
-      email: process.env.NEXT_PUBLIC_CMS_VOLUNTEER_2_EMAIL || 'volunteer2@seva.org',
-      password: process.env.NEXT_PUBLIC_CMS_VOLUNTEER_2_PASSWORD || 'Vol@2026_Slot2'
-    },
-    {
-      slot: 3,
-      name: 'Field Volunteer Slot 3',
-      zone: 'East Mobile Relief Cart',
-      email: process.env.NEXT_PUBLIC_CMS_VOLUNTEER_3_EMAIL || 'volunteer3@seva.org',
-      password: process.env.NEXT_PUBLIC_CMS_VOLUNTEER_3_PASSWORD || 'Vol@2026_Slot3'
-    },
-    {
-      slot: 4,
-      name: 'Field Volunteer Slot 4',
-      zone: 'West Community Kitchen',
-      email: process.env.NEXT_PUBLIC_CMS_VOLUNTEER_4_EMAIL || 'volunteer4@seva.org',
-      password: process.env.NEXT_PUBLIC_CMS_VOLUNTEER_4_PASSWORD || 'Vol@2026_Slot4'
-    }
-  ];
-
-  // Pre-fill according to requested role query parameter if provided
-  useEffect(() => {
-    if (requestedRole === 'admin') {
-      setIdentifier(envAdminEmail);
-      setPassword(envAdminPass);
-    } else if (requestedRole === 'volunteer') {
-      setIdentifier(envVolunteers[0].email);
-      setPassword(envVolunteers[0].password);
-    }
-  }, [requestedRole, envAdminEmail, envAdminPass]);
-
-  const handleQuickFill = (targetEmail: string, targetPass: string) => {
-    setIdentifier(targetEmail);
-    setPassword(targetPass);
-    setError('');
-    setSuccessMessage(`Loaded credentials for ${targetEmail}`);
-  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,12 +52,11 @@ function CMSLoginContent() {
         setSuccessMessage(`Welcome, ${res.user.name}! Opening Volunteer Operations Hub...`);
         setTimeout(() => router.push(redirectUrl || '/volunteer'), 500);
       } else {
-        // Logged in as donor through CMS
-        setError('This portal is restricted to Administrators and Field Volunteers. Please log in via the Donor Portal.');
+        setError('This portal is restricted to authorized Administrators and Field Volunteers. Please log in via the Donor Portal.');
         logout();
       }
     } else {
-      setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Invalid CMS credentials. Check your environment settings.');
+      setError(typeof res.error === 'string' ? res.error : (res.error as any)?.message || 'Invalid CMS credentials. Please verify your environment or account settings.');
     }
   };
 
@@ -143,7 +84,7 @@ function CMSLoginContent() {
           CMS & Staff Login
         </h2>
         <p className="mt-1.5 text-xs sm:text-sm text-slate-400 max-w-sm mx-auto">
-          Secure authentication for the <strong>Administrator Console</strong> and the <strong>4 Field Volunteer Slots</strong> configured via Environment.
+          Secure authentication for the <strong>Administrator Console</strong> and <strong>Field Volunteer Operations</strong>.
         </p>
       </div>
 
@@ -179,7 +120,7 @@ function CMSLoginContent() {
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="admin@seva.org or volunteer1@seva.org"
+                  placeholder="Enter operational email or phone"
                   className="w-full pl-9 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm font-medium text-white placeholder-slate-600 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none transition-all"
                 />
               </div>
@@ -187,7 +128,7 @@ function CMSLoginContent() {
 
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1">
-                Password (Configured in .env)
+                Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
@@ -207,65 +148,13 @@ function CMSLoginContent() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 via-amber-600 to-orange-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 mt-2"
+              className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 via-amber-600 to-orange-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 mt-2 cursor-pointer"
             >
               <KeyRound className="w-4 h-4" />
               <span>{loading ? 'Authenticating Personnel...' : 'Sign In to Operations Console'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
-
-          {/* Quick-Fill Environment Credential Helper Card */}
-          <div className="pt-4 border-t border-slate-800/80 space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-400 uppercase text-[10px] tracking-wider flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-orange-400" />
-                Env-Configured Personnel Accounts
-              </span>
-              <span className="text-[10px] text-slate-500 font-mono">1 Admin • 4 Volunteers</span>
-            </div>
-
-            <div className="space-y-2">
-              {/* Administrator Slot */}
-              <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-900/50 flex items-center justify-between gap-2 text-xs">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                    <span className="font-bold text-purple-200 truncate">Chief Administrator</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400 font-mono truncate">{envAdminEmail}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleQuickFill(envAdminEmail, envAdminPass)}
-                  className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold shrink-0 transition-colors"
-                >
-                  Quick Fill
-                </button>
-              </div>
-
-              {/* 4 Field Volunteer Slots */}
-              {envVolunteers.map(vol => (
-                <div key={vol.slot} className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between gap-2 text-xs">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span className="font-bold text-slate-200 truncate">{vol.name}</span>
-                      <span className="text-[9px] text-slate-500 truncate">({vol.zone})</span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 font-mono truncate">{vol.email}</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill(vol.email, vol.password)}
-                    className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold shrink-0 transition-colors"
-                  >
-                    Slot {vol.slot}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
 
           {/* Links back */}
           <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
@@ -294,4 +183,3 @@ export default function CMSLoginPage() {
     </Suspense>
   );
 }
-
