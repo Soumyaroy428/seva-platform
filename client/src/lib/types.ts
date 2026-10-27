@@ -318,4 +318,14 @@ export interface IRightHeroCard {
   updatedAt?: string | Date;
 }
 
+export interface IEmailRecipient {
+  email: string;
+  name: string;
+  role: string;
+  totalDonated: number;
+  donationCount: number;
+  lastActive: string;
+  phone?: string;
+}
+
 

@@ -2835,13 +2835,15 @@ class SevaServerStore {
     };
     this.auditLogs.unshift(entry);
 
-    AuditLogModel.create({
-      user: entry.user,
-      action: entry.action,
-      entity: entry.entity,
-      details: entry.details,
-      timestamp: new Date()
-    }).catch(() => {});
+    if (mongoose.connection.readyState === 1) {
+      AuditLogModel.create({
+        user: entry.user,
+        action: entry.action,
+        entity: entry.entity,
+        details: entry.details,
+        timestamp: new Date()
+      }).catch(() => {});
+    }
   }
 
   // Bidirectional Synchronization with MongoDB Atlas

@@ -24,6 +24,7 @@ import faqRouter from './routes/faq';
 import heroCardsRouter from './routes/heroCards';
 import verifiedMetricsRouter from './routes/verifiedMetrics';
 import paymentsRouter from './routes/payments';
+import emailCampaignsRouter from './routes/emailCampaigns';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -165,6 +166,7 @@ app.use('/api/faq', faqRouter);
 app.use('/api/hero-cards', heroCardsRouter);
 app.use('/api/verified-metrics', verifiedMetricsRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api/email-campaigns', emailCampaignsRouter);
 
 
 // Initialize DB and launch server

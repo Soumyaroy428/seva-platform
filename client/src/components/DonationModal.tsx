@@ -126,6 +126,30 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     }
   }, [isOpen, session]);
 
+  // Check URL query parameters for prefilled amount, email, and campaign from email links
+  useEffect(() => {
+    if (isOpen && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlAmount = params.get('amount');
+      const urlEmail = params.get('email') || params.get('donorEmail');
+      const urlCampaign = params.get('campaign') || params.get('campaignId');
+
+      if (urlAmount && !isNaN(Number(urlAmount))) {
+        const parsed = Number(urlAmount);
+        if (parsed >= 20) {
+          setAmount(parsed);
+          setCustomAmount(parsed.toString());
+        }
+      }
+      if (urlEmail && urlEmail.includes('@') && !donorEmail) {
+        setDonorEmail(urlEmail.trim());
+      }
+      if (urlCampaign && !selectedCampaignId) {
+        setSelectedCampaignId(urlCampaign);
+      }
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   // Resolve target campaign

@@ -558,3 +558,129 @@ export async function sendDonationRejectedNotification({
     return { success: false, error: err?.message || 'Failed to dispatch email' };
   }
 }
+
+/**
+ * 8. Dispatch Monthly Donation Pledge Request Email with Embedded "Pay Now" Button
+ */
+export async function sendMonthlyDonationRequestEmail({
+  to,
+  recipientName,
+  campaignTitle,
+  campaignId,
+  monthlyAmount,
+  customMessage,
+  senderName,
+  senderRole,
+  paymentUrl
+}: {
+  to: string;
+  recipientName?: string;
+  campaignTitle?: string;
+  campaignId?: string;
+  monthlyAmount: number;
+  customMessage?: string;
+  senderName?: string;
+  senderRole?: 'Admin' | 'Volunteer' | string;
+  paymentUrl: string;
+}): Promise<ISendEmailResult> {
+  const resend = getResendClient();
+  const name = recipientName || 'Compassionate Supporter';
+  const title = campaignTitle || 'Community Hunger Relief & Daily Kitchen Support';
+  const meals = Math.max(1, Math.floor(monthlyAmount / 25));
+  const senderDisplay = senderName ? `${senderName} (${senderRole || 'Volunteer'})` : 'The SEVA Humanitarian Team';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.06); }
+          .header { background: linear-gradient(135deg, #ea580c 0%, #d97706 100%); padding: 36px 24px; text-align: center; color: #ffffff; }
+          .logo-text { font-size: 26px; font-weight: 900; letter-spacing: 1.5px; margin: 0; }
+          .badge { display: inline-block; background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.35); border-radius: 9999px; padding: 4px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-top: 10px; letter-spacing: 0.5px; }
+          .content { padding: 32px 28px; }
+          .appeal-card { background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%); border: 1px solid #fed7aa; border-radius: 16px; padding: 24px; text-align: center; margin: 24px 0; }
+          .amount-label { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #9a3412; letter-spacing: 1px; }
+          .amount-val { font-size: 38px; font-weight: 900; color: #ea580c; margin: 6px 0; }
+          .impact-pill { display: inline-block; background: #ea580c; color: #ffffff; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+          .impact-desc { font-size: 13px; color: #7c2d12; font-weight: 500; }
+          .btn-container { text-align: center; margin: 30px 0 20px 0; }
+          .pay-btn { display: inline-block; background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color: #ffffff !important; text-decoration: none; font-weight: 800; font-size: 16px; padding: 16px 40px; border-radius: 14px; box-shadow: 0 6px 20px rgba(234, 88, 12, 0.35); text-align: center; letter-spacing: 0.5px; }
+          .quote-box { background: #f8fafc; border-left: 4px solid #ea580c; padding: 14px 18px; border-radius: 0 12px 12px 0; margin: 20px 0; font-size: 13.5px; color: #334155; line-height: 1.6; font-style: italic; }
+          .tax-note { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 14px; margin-top: 24px; font-size: 12px; color: #065f46; line-height: 1.5; }
+          .footer { background: #f8fafc; padding: 24px 20px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 class="logo-text">SEVA FOUNDATION</h1>
+            <div class="badge">Official Monthly Hunger Relief Appeal</div>
+          </div>
+          <div class="content">
+            <p style="font-size: 15px;">Namaste <strong>${name}</strong>,</p>
+            <p style="font-size: 14px; line-height: 1.6; color: #334155;">
+              As part of our continuous hunger relief mission, we invite you to renew your compassionate commitment with a monthly contribution for <strong>${title}</strong>.
+            </p>
+
+            ${customMessage ? `
+            <div class="quote-box">
+              &ldquo;${customMessage}&rdquo;
+              <div style="font-style: normal; font-weight: 700; font-size: 12px; color: #ea580c; margin-top: 8px;">— ${senderDisplay}</div>
+            </div>` : ''}
+
+            <div class="appeal-card">
+              <div class="amount-label">Suggested Monthly Support</div>
+              <div class="amount-val">₹${monthlyAmount.toLocaleString('en-IN')}</div>
+              <div class="impact-pill">🍲 Feeds ~${meals} Wholesome Meals</div>
+              <div class="impact-desc">Your monthly gift ensures our community kitchen never runs out of rations for hungry children, daily wage earners, and elderly individuals.</div>
+            </div>
+
+            <!-- Prominent Pay Now Button -->
+            <div class="btn-container">
+              <a href="${paymentUrl}" class="pay-btn" target="_blank">
+                👉 Click Here to Pay ₹${monthlyAmount} Now
+              </a>
+            </div>
+
+            <p style="text-align: center; font-size: 12px; color: #64748b; margin-top: 10px;">
+              Direct NPCI UPI, PhonePe, GPay, Paytm & Instant 80G Tax Receipt.
+            </p>
+
+            <div class="tax-note">
+              <strong>100% Tax Exemption Under Section 80G:</strong><br>
+              Every rupee donated is eligible for 50% tax deduction under Section 80G of the Indian Income Tax Act. An official signed tax certificate is dispatched immediately to your email upon payment.
+            </div>
+          </div>
+          <div class="footer">
+            &copy; ${new Date().getFullYear()} SEVA Foundation • Trust Reg: SEVA/WB/2026/80G<br>
+            Toll-Free Helpline: +91 1800-SEVA-AID • Kolkata, West Bengal<br>
+            You are receiving this invitation as a registered supporter of the SEVA humanitarian network.
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  if (!resend) {
+    console.log(`ℹ️ [Resend Mock Mode] Monthly Donation Request to "${to}": Amount = ₹${monthlyAmount}, Campaign = "${title}", Pay URL = ${paymentUrl}`);
+    return { success: true, mocked: true };
+  }
+
+  try {
+    const data = await resend.emails.send({
+      from: getFromEmail(),
+      to: [to],
+      subject: `Monthly Hunger Relief Appeal — Support ${title} [₹${monthlyAmount}/month]`,
+      html
+    });
+    console.log(`✅ [Resend] Dispatched Monthly Donation Request to ${to} (Message ID: ${data.data?.id})`);
+    return { success: true, messageId: data.data?.id };
+  } catch (err: any) {
+    console.error(`❌ [Resend] Failed to send monthly donation request to ${to}:`, err);
+    return { success: false, error: err?.message || 'Failed to dispatch email' };
+  }
+}

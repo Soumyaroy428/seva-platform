@@ -28,6 +28,7 @@ import {
   Sparkles,
   Lock,
   Phone,
+  Mail,
   Clock,
   ExternalLink,
   MapPin,
@@ -71,6 +72,7 @@ import {
   IVerifiedMetrics
 } from '@/lib/types';
 import PaymentManagementSection from '@/components/admin/PaymentManagementSection';
+import MonthlyDonationEmailSection from '@/components/MonthlyDonationEmailSection';
 
 interface IQuotaInfo {
   admins: {
@@ -93,6 +95,7 @@ interface IQuotaInfo {
 type TabType =
   | 'overview'
   | 'payments'
+  | 'email-outreach'
   | 'campaigns'
   | 'hero-cards'
   | 'announcement-strip'
@@ -1769,6 +1772,16 @@ function AdminDashboardContent() {
                 {recentDonations.filter(d => d.status === 'PENDING_VERIFICATION').length}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('email-outreach')}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'email-outreach' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Mail className="w-3.5 h-3.5 text-orange-500" />
+            <span>Email Outreach & Pledges</span>
           </button>
 
           <button
@@ -5369,6 +5382,13 @@ function AdminDashboardContent() {
             campaigns={campaigns}
             qrs={qrs}
             onRefreshStats={fetchAdminData}
+          />
+        )}
+
+        {activeTab === 'email-outreach' && (
+          <MonthlyDonationEmailSection
+            userRole="admin"
+            currentUser={user}
           />
         )}
 

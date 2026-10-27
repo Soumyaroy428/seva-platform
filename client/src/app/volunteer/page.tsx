@@ -34,11 +34,12 @@ import {
 import { IVolunteer, IDistributionEvent, IDonation, ICampaign } from '@/lib/types';
 import { formatINR } from '@/lib/utils';
 import DigitalVolunteerID from '@/components/DigitalVolunteerID';
+import MonthlyDonationEmailSection from '@/components/MonthlyDonationEmailSection';
 
 export default function VolunteerDashboard() {
   const { user, loading: authLoading, logout, refreshUser } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'payments' | 'hand-cash' | 'distribution' | 'badge'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'hand-cash' | 'distribution' | 'badge' | 'email-requests'>('payments');
   const [loading, setLoading] = useState(true);
   const [volunteers, setVolunteers] = useState<IVolunteer[]>([]);
   const [distributions, setDistributions] = useState<IDistributionEvent[]>([]);
@@ -572,6 +573,18 @@ export default function VolunteerDashboard() {
               <Award className="w-3.5 h-3.5" />
               <span>My Digital Volunteer ID</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab('email-requests')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === 'email-requests'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5 text-orange-500" />
+              <span>Send Monthly Donation Requests</span>
+            </button>
           </div>
 
           {/* Top Hand Cash CTA */}
@@ -843,6 +856,14 @@ export default function VolunteerDashboard() {
             </p>
             <DigitalVolunteerID volunteer={currentVolunteer} />
           </div>
+        )}
+
+        {/* TAB 5: MONTHLY DONATION OUTREACH & REQUESTS */}
+        {activeTab === 'email-requests' && (
+          <MonthlyDonationEmailSection
+            userRole="volunteer"
+            currentUser={user}
+          />
         )}
       </main>
 

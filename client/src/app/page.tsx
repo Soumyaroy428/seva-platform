@@ -148,6 +148,21 @@ export default function HomePage() {
     } catch {}
   }, []);
 
+  // Open donation modal if URL contains ?donate=true (e.g. from Monthly Request Email "Pay Now" button)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('donate') === 'true') {
+        const campParam = params.get('campaign');
+        if (campParam && campaigns.length > 0) {
+          const matched = campaigns.find(c => (c.id || c._id) === campParam || c.slug === campParam);
+          if (matched) setSelectedCampaign(matched);
+        }
+        setDonateOpen(true);
+      }
+    }
+  }, [campaigns]);
+
   const handleOpenDonate = (campaign?: ICampaign) => {
     setSelectedCampaign(campaign || null);
     setDonateOpen(true);
