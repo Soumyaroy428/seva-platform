@@ -133,12 +133,30 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
+  // Restore donation modal if user returns from external UPI app after a browser reload
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('seva_active_donation_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.timestamp && (Date.now() - parsed.timestamp < 30 * 60 * 1000)) {
+          setDonateOpen(true);
+        } else {
+          localStorage.removeItem('seva_active_donation_session');
+        }
+      }
+    } catch {}
+  }, []);
+
   const handleOpenDonate = (campaign?: ICampaign) => {
     setSelectedCampaign(campaign || null);
     setDonateOpen(true);
   };
 
   const handleDonationSuccess = (donation: IDonation) => {
+    try {
+      localStorage.removeItem('seva_active_donation_session');
+    } catch {}
     setDonateOpen(false);
     setActiveReceipt(donation);
 
@@ -232,7 +250,12 @@ export default function HomePage() {
       <DonationModal
         isOpen={donateOpen}
         campaign={selectedCampaign}
-        onClose={() => setDonateOpen(false)}
+        onClose={() => {
+          try {
+            localStorage.removeItem('seva_active_donation_session');
+          } catch {}
+          setDonateOpen(false);
+        }}
         onSuccess={handleDonationSuccess}
       />
 

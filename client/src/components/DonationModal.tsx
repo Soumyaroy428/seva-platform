@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ICampaign, IDonation, IPaymentQR } from '@/lib/types';
 import { formatINR } from '@/lib/utils';
-import { Heart, X, QrCode, AlertCircle, Copy, Check, Sparkles, Smartphone, ArrowRight, Loader2, MessageSquare, Layers, Upload, Info, ShieldCheck } from 'lucide-react';
+import { Heart, X, QrCode, AlertCircle, Copy, Check, Sparkles, Smartphone, ArrowRight, Loader2, MessageSquare, Layers, Upload, Info, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 interface DonationModalProps {
   isOpen: boolean;
@@ -31,7 +31,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
   const [copiedUPI, setCopiedUPI] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [showDynamicUtrInput, setShowDynamicUtrInput] = useState<boolean>(false);
+  const [showDynamicUtrInput, setShowDynamicUtrInput] = useState<boolean>(true);
   const [dynamicUtr, setDynamicUtr] = useState<string>('');
   const [isVerifyingDynamicUtr, setIsVerifyingDynamicUtr] = useState<boolean>(false);
   const [dynamicUtrError, setDynamicUtrError] = useState<string>('');
@@ -100,6 +100,32 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     return () => clearInterval(interval);
   }, [session, onSuccess]);
 
+  // Restore saved session from localStorage if returning from UPI app redirect/refresh
+  useEffect(() => {
+    if (isOpen && !session) {
+      try {
+        const saved = localStorage.getItem('seva_active_donation_session');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.timestamp && (Date.now() - parsed.timestamp < 30 * 60 * 1000)) {
+            setSession(parsed);
+            setShowDynamicUtrInput(true);
+            if (parsed.amount) {
+              setAmount(parsed.amount);
+              setCustomAmount(parsed.amount.toString());
+            }
+            if (parsed.donorName) setDonorName(parsed.donorName);
+            if (parsed.donorEmail) setDonorEmail(parsed.donorEmail);
+            if (parsed.donorPhone) setDonorPhone(parsed.donorPhone);
+            if (parsed.isAnonymous !== undefined) setIsAnonymous(parsed.isAnonymous);
+          } else {
+            localStorage.removeItem('seva_active_donation_session');
+          }
+        }
+      } catch {}
+    }
+  }, [isOpen, session]);
+
   if (!isOpen) return null;
 
   // Resolve target campaign
@@ -109,9 +135,9 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     setAmount(val);
     setCustomAmount(val.toString());
     setSession(null);
-    setShowDynamicUtrInput(false);
     setDynamicUtr('');
     setDynamicUtrError('');
+    try { localStorage.removeItem('seva_active_donation_session'); } catch {}
   };
 
   const handleCustomAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,9 +147,9 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
     if (!isNaN(parsed)) {
       setAmount(parsed);
       setSession(null);
-      setShowDynamicUtrInput(false);
       setDynamicUtr('');
       setDynamicUtrError('');
+      try { localStorage.removeItem('seva_active_donation_session'); } catch {}
     }
   };
 
@@ -234,6 +260,10 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
         throw new Error(data.error || 'Failed to verify transaction reference.');
       }
 
+      try {
+        localStorage.removeItem('seva_active_donation_session');
+      } catch {}
+
       onSuccess(data.donation);
     } catch (err: any) {
       setIsVerifyingDynamicUtr(false);
@@ -287,7 +317,7 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
         throw new Error(data.error || 'Failed to initialize payment session');
       }
 
-      setSession({
+      const newSession = {
         paymentId: data.paymentId,
         orderId: data.orderId,
         checkoutUrl: data.checkoutUrl,
@@ -296,8 +326,23 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
         upiPayeeAddress: data.upiPayeeAddress || '6295804018@jio',
         upiPayeeName: data.upiPayeeName || 'Soumya Roy',
         qrImageUrl: data.qrImageUrl,
-        donationId: data.donationId
-      });
+        donationId: data.donationId,
+        timestamp: Date.now(),
+        donorName: donorName.trim(),
+        donorEmail: donorEmail.trim(),
+        donorPhone: donorPhone.trim(),
+        campaignId: activeCampaign?.id || activeCampaign?._id || 'CMP-1',
+        campaignTitle: activeCampaign?.title || 'General Community Hunger Relief',
+        isAnonymous,
+        selectedCampaignId: activeCampaign?.id || activeCampaign?._id || ''
+      };
+
+      setSession(newSession);
+      setShowDynamicUtrInput(true);
+
+      try {
+        localStorage.setItem('seva_active_donation_session', JSON.stringify(newSession));
+      } catch {}
     } catch (err: any) {
       setIsSubmitting(false);
       setErrorMessage(err.message || 'Payment service error. Please try again.');
@@ -600,18 +645,31 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                      <a
-                        href={session.upiIntent}
+                      <button
+                        type="button"
                         onClick={() => {
-                          if (typeof window !== 'undefined' && session?.upiIntent) {
-                            window.location.href = session.upiIntent;
+                          if (session?.upiIntent) {
+                            try {
+                              localStorage.setItem('seva_active_donation_session', JSON.stringify({
+                                ...session,
+                                timestamp: Date.now(),
+                                donorName: donorName.trim(),
+                                donorEmail: donorEmail.trim(),
+                                donorPhone: donorPhone.trim(),
+                                campaignId: activeCampaign?.id || activeCampaign?._id || 'CMP-1',
+                                campaignTitle: activeCampaign?.title || 'General Community Hunger Relief',
+                                isAnonymous,
+                                selectedCampaignId: activeCampaign?.id || activeCampaign?._id || ''
+                              }));
+                            } catch {}
+                            window.location.assign(session.upiIntent);
                           }
                         }}
                         className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
                       >
                         <Smartphone className="w-4 h-4" />
                         <span>Open Installed UPI App</span>
-                      </a>
+                      </button>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(getActiveUPIId())}
@@ -622,85 +680,70 @@ export default function DonationModal({ isOpen, onClose, campaign, onSuccess }: 
                       </button>
                     </div>
 
-                    {/* NPCI & UPI App Helper Notice */}
-                    <div className="p-2.5 bg-blue-50/80 border border-blue-200/80 rounded-xl text-left text-[11px] text-blue-900 space-y-1">
-                      <div className="flex items-center gap-1 font-bold text-blue-950">
-                        <Info className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                        <span>Payment Guidance & Tips:</span>
+                    {/* NPCI Self-Payment & App Guidance Notice */}
+                    <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-left text-[11px] text-amber-950 space-y-1.5 shadow-xs">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        <span>Critical Payment Notice:</span>
                       </div>
-                      <p className="text-blue-900/90 leading-relaxed text-[10.5px]">
-                        • <strong>On Mobile:</strong> Tap <em>&ldquo;Open Installed UPI App&rdquo;</em> to launch PhonePe/GPay directly with zero scan limits.<br />
-                        • <strong>Gallery Scans:</strong> If scanning saved QR from gallery, tap <em>Dismiss</em> on the NPCI notice, then tap the purple <em>&ldquo;Pay ₹{amount}&rdquo;</em> button to enter your UPI PIN.<br />
-                        • <strong>Testing Note:</strong> NPCI strictly blocks paying your own UPI ID from the same phone/account. Test using a family/friend account or secondary bank.
+                      <p className="text-amber-900 leading-relaxed text-[10.5px]">
+                        • <strong>Self-Payment Rule (NPCI):</strong> The receiving UPI ID is <strong>{getActiveUPIId()} ({getActivePayeeName()})</strong>. If your PhonePe/GPay is registered to <code>6295804018</code> or your SBI account, <strong>NPCI prohibits transferring to yourself</strong>. PhonePe will close the payment drawer without opening the UPI PIN screen. Please test from a family/friend&apos;s phone or a secondary bank account.<br />
+                        • <strong>PhonePe Gallery Notice:</strong> Tapping <em>Dismiss</em> closes the gallery warning; then tap the purple <em>&ldquo;Pay ₹{amount}&rdquo;</em> button to enter your UPI PIN.
                       </p>
                     </div>
 
-                    {/* Real-time Confirmation: Auto-reconciliation + Manual 12-Digit UTR Confirm */}
+                    {/* Real-time Confirmation: Auto-reconciliation + Permanent 12-Digit UTR Form */}
                     <div className="pt-3 border-t border-slate-200/90 space-y-2.5">
                       <div className="text-xs text-slate-500 flex items-center justify-center gap-1.5">
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-600" />
                         <span>Waiting for bank confirmation (auto-reconciling)...</span>
                       </div>
 
-                      {!showDynamicUtrInput ? (
-                        <div className="p-3 bg-white rounded-xl border border-slate-200 text-center space-y-2 shadow-sm">
-                          <p className="text-xs font-bold text-slate-800">
-                            Already completed payment in your UPI app?
-                          </p>
+                      <form onSubmit={handleDynamicUtrSubmit} className="space-y-2.5 text-left bg-white p-3.5 rounded-xl border-2 border-emerald-500/40 shadow-sm animate-in fade-in">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                            <span>Paid via UPI App? Enter 12-Digit Bank UTR / Ref No:</span>
+                          </label>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-tight">
+                          After completing payment in PhonePe/GPay/Paytm, enter the 12-digit UPI Reference / UTR Number from your app receipt or bank debit SMS to immediately verify and download your official 80G Tax Receipt.
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            required
+                            value={dynamicUtr}
+                            onChange={(e) => {
+                              setDynamicUtr(e.target.value.replace(/[^0-9A-Za-z]/g, ''));
+                              setDynamicUtrError('');
+                            }}
+                            placeholder="e.g. 429810482910"
+                            className="flex-1 text-xs px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-slate-900"
+                            maxLength={16}
+                          />
                           <button
-                            type="button"
-                            onClick={() => setShowDynamicUtrInput(true)}
-                            className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95"
+                            type="submit"
+                            disabled={isVerifyingDynamicUtr}
+                            className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50 active:scale-95 whitespace-nowrap"
                           >
-                            <Check className="w-4 h-4" />
-                            <span>Paid via UPI App? Click to Confirm & Get 80G Receipt</span>
+                            {isVerifyingDynamicUtr ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Verifying...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Confirm & Get Receipt</span>
+                              </>
+                            )}
                           </button>
                         </div>
-                      ) : (
-                        <form onSubmit={handleDynamicUtrSubmit} className="space-y-2.5 text-left bg-white p-3.5 rounded-xl border border-emerald-200 shadow-sm animate-in fade-in">
-                          <div className="flex items-center justify-between">
-                            <label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                              <span>Enter 12-Digit Bank Reference / UTR:</span>
-                            </label>
-                            <button
-                              type="button"
-                              onClick={() => { setShowDynamicUtrInput(false); setDynamicUtrError(''); }}
-                              className="text-[11px] text-slate-400 hover:text-slate-600 font-medium"
-                            >
-                              Hide
-                            </button>
-                          </div>
-                          <p className="text-[11px] text-slate-500 leading-tight">
-                            Find the 12-digit UTR / UPI Ref No in your PhonePe / GPay / Paytm payment receipt or bank debit SMS.
-                          </p>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              required
-                              value={dynamicUtr}
-                              onChange={(e) => setDynamicUtr(e.target.value)}
-                              placeholder="e.g. 429810482910"
-                              className="flex-1 text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                            />
-                            <button
-                              type="submit"
-                              disabled={isVerifyingDynamicUtr}
-                              className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition-all shadow-sm disabled:opacity-50"
-                            >
-                              {isVerifyingDynamicUtr ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Check className="w-3.5 h-3.5" />
-                              )}
-                              <span>Verify</span>
-                            </button>
-                          </div>
-                          {dynamicUtrError && (
-                            <p className="text-[11px] text-red-600 font-medium">{dynamicUtrError}</p>
-                          )}
-                        </form>
-                      )}
+                        {dynamicUtrError && (
+                          <p className="text-[11px] text-red-600 font-bold">{dynamicUtrError}</p>
+                        )}
+                      </form>
                     </div>
                   </div>
                 )}
