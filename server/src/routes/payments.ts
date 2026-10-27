@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { serverStore } from '../services/store';
+import { DonationModel } from '../models';
 import { sendDonationReceiptEmail, sendDonationPendingNotification } from '../services/email';
 
 const router = Router();
@@ -393,16 +395,76 @@ router.post('/manual-qr-submit', async (req: Request, res: Response) => {
 // 5. POST /api/payments/verify-settlement — Verify Payment & Issue 80G Receipt
 router.post('/verify-settlement', async (req: Request, res: Response) => {
   try {
-    const { paymentId, utr, donorName, donorEmail, donorPhone, amount, campaignId, campaignTitle, isAnonymous } = req.body;
+    const { paymentId, orderId, utr, donorName, donorEmail, donorPhone, amount, campaignId, campaignTitle, isAnonymous } = req.body;
+
+    const cleanUtr = String(utr || '').trim();
+    if (!cleanUtr || cleanUtr.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'A valid 12-digit UPI reference / UTR number is required for donation verification.'
+      });
+    }
 
     const allDonations = serverStore.getDonations();
-    let donation = allDonations.find(d => d.transactionId === paymentId);
+
+    // 1. Prevent duplicate UTR usage across other settled donations
+    const duplicateUtr = allDonations.find(d =>
+      d.transactionId &&
+      d.transactionId.toLowerCase() === cleanUtr.toLowerCase() &&
+      d.donationId !== paymentId &&
+      (d.status === 'SUCCESS' || d.status === 'Successful' || d.status === 'Verified')
+    );
+
+    if (duplicateUtr) {
+      return res.status(409).json({
+        success: false,
+        error: `A verified donation with reference ${cleanUtr} already exists (Donation ID: ${duplicateUtr.donationId}). Duplicate submissions are prevented.`
+      });
+    }
+
+    // 2. Find initiated donation record
+    let donation = allDonations.find(d => 
+      (paymentId && (d.transactionId === paymentId || d.gatewayPaymentId === paymentId || d.donationId === paymentId)) ||
+      (orderId && (d.gatewayOrderId === orderId || d.transactionId === orderId))
+    );
+
+    // 3. Fallback to MongoDB Atlas if not in memory
+    if (!donation && mongoose.connection.readyState === 1) {
+      const dbDonation: any = await DonationModel.findOne({
+        $or: [
+          ...(paymentId ? [{ transactionId: paymentId }, { gatewayPaymentId: paymentId }, { donationId: paymentId }] : []),
+          ...(orderId ? [{ gatewayOrderId: orderId }, { transactionId: orderId }] : [])
+        ]
+      }).lean();
+      if (dbDonation) {
+        donation = {
+          id: dbDonation.id || dbDonation._id?.toString(),
+          donationId: dbDonation.donationId,
+          donorName: dbDonation.donorName,
+          donorEmail: dbDonation.donorEmail,
+          donorPhone: dbDonation.donorPhone,
+          amount: dbDonation.amount,
+          currency: dbDonation.currency,
+          campaignId: dbDonation.campaignId,
+          campaignTitle: dbDonation.campaignTitle,
+          paymentMethod: dbDonation.paymentMethod,
+          status: dbDonation.status,
+          transactionId: dbDonation.transactionId,
+          createdAt: dbDonation.createdAt ? new Date(dbDonation.createdAt).toISOString() : new Date().toISOString()
+        };
+        serverStore.getDonations().push(donation);
+      }
+    }
 
     const parsedAmount = Number(amount) || 20;
 
     if (!donation) {
-      // Create confirmed donation record
+      const year = new Date().getFullYear();
+      const randomNum = Math.floor(100000 + Math.random() * 900000);
+      const donationId = `SEVA-DON-${year}-${randomNum}`;
+
       donation = serverStore.createDonation({
+        donationId,
         donorName: isAnonymous ? 'Kind Supporter' : (donorName || 'Generous Donor'),
         donorEmail: donorEmail || '',
         donorPhone: donorPhone || '',
@@ -410,16 +472,34 @@ router.post('/verify-settlement', async (req: Request, res: Response) => {
         campaignId: campaignId || 'CMP-1',
         campaignTitle: campaignTitle || 'General Hunger Relief & Kitchen Support',
         paymentMethod: 'UPI',
-        transactionId: utr || paymentId || `TXN-${Date.now()}`,
+        transactionId: cleanUtr,
         isAnonymous: Boolean(isAnonymous),
         status: 'Successful',
-        auditorNotes: `Verified UPI Settlement. UTR: ${utr || 'Auto-Confirmed'}`
+        verificationSource: 'DONOR_SETTLEMENT_CONFIRMATION',
+        auditorNotes: `Verified UPI Settlement. UTR: ${cleanUtr}`
       });
     } else {
       serverStore.updateDonation(donation.id || donation.donationId || '', {
         status: 'Successful',
-        receiptNote: `Verified UPI Settlement. UTR: ${utr || 'Auto-Confirmed'}`
+        transactionId: cleanUtr,
+        verificationSource: 'DONOR_SETTLEMENT_CONFIRMATION',
+        receiptNote: `Verified UPI Settlement. Bank UTR: ${cleanUtr}`
       }, 'UPI-Settlement-Service');
+    }
+
+    // Persist verified donation to MongoDB Atlas
+    if (mongoose.connection.readyState === 1) {
+      await DonationModel.updateOne(
+        { $or: [{ donationId: donation.donationId }, { transactionId: cleanUtr }] },
+        {
+          $set: {
+            status: 'Successful',
+            transactionId: cleanUtr,
+            verificationSource: 'DONOR_SETTLEMENT_CONFIRMATION'
+          }
+        },
+        { upsert: true }
+      ).catch((err: any) => console.warn('MongoDB Atlas Donation update error:', err.message));
     }
 
     // Trigger 80G Receipt Email via Resend
@@ -432,11 +512,18 @@ router.post('/verify-settlement', async (req: Request, res: Response) => {
           amount: donation.amount,
           campaignTitle: donation.campaignTitle || 'General Hunger Relief & Kitchen Support',
           paymentMethod: 'UPI',
-          transactionId: utr || paymentId,
+          transactionId: cleanUtr,
           createdAt: donation.createdAt
         }
       }).catch(err => console.warn('Resend 80G dispatch error:', err.message));
     }
+
+    serverStore.logAudit(
+      donation.donorEmail || donation.donorName,
+      'DONATION_SETTLED',
+      'Donation',
+      `UPI contribution of ₹${donation.amount} verified with Bank UTR ${cleanUtr} (Donation ID: ${donation.donationId})`
+    );
 
     return res.json({
       success: true,
